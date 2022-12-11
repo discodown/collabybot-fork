@@ -156,10 +156,9 @@ class DiscordCollabyBot(Bot):
 
         :return: None
         """
-        embed = discord.Embed(color=0x2ecc71, title=f'Here\'s a list of commands you can use:\n')
+        embed = discord.Embed(color=discord.Color.blurple(), title=f'Here\'s a list of commands you can use:\n')
         for command in ctx.bot.commands:
             embed.add_field(name=f'/{command.name}:', value=f'{command.description}', inline=False)
-        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
         await ctx.send(embed=embed)
 
     @commands.command(name='ping', description='Respond with pong')
@@ -190,32 +189,29 @@ class DiscordCollabyBot(Bot):
         if repo == '':
             if not repos:
                 not_found_error = discord.Embed(color=discord.Color.yellow(),
-                                                description=f'You haven\'t added any repositories to CollabyBot yet. Use /add <owner/repo-name> to add one.')
+                                                description='You haven\'t added any repositories to CollabyBot yet. Use /add <owner/repo-name> to add one.')
                 await ctx.send(embed=discord.Embed(
-                                color=discord.Color.yellow(),
-                                description=f'You haven\'t added any repositories to CollabyBot yet. Use /add <owner/repo-name> to add one.'))
+                    color=discord.Color.yellow(),
+                    description='You haven\'t added any repositories to CollabyBot yet. Use /add <owner/repo-name> to add one.'))
                 # await(ctx.send(f'You haven\'t added any repositories to CollabyBot yet. 'f'Use /add <owner/repo-name> to add one.'))
             else:
                 repo_list = ''
                 for r in repos.keys():
                     repo_list += f'{r}\n'
-                await ctx.send(f'Subscribe to one of the following added repositories using /pull-requests <repo name>:',
-                            embed=discord.Embed(color=discord.Color.yellow(),
-                                                description=f'{repo_list}'
-                                                )
+                await ctx.send('Subscribe to one of the following added repositories using /pull-requests <repo name>:',
+                               embed=discord.Embed(color=discord.Color.yellow(),
+                                                   description=f'{repo_list}'
+                                                   )
                                )
         elif repo not in repos.keys():
 
             await ctx.send(embed=discord.Embed(
-                            color=discord.Color.yellow(),
-                            description=f'Repository {repo} hasn\'t been added to CollabyBot yet. 'f'Use /add <owner/repo-name> to add it.'
-                        )
+                color=discord.Color.yellow(),
+                description=f'Repository {repo} hasn\'t been added to CollabyBot yet. Use /add <owner/repo-name> to add it.'
+            )
             )
         elif channel not in pr_subscribers[repo]:
             pr_subscribers[repo].append(channel)
-            subscribe_embed = discord.Embed(color=0x9b59b6,
-                                            title=f'#{ctx.channel} channel is now subscribed to pull requests for {repo}!')
-            subscribe_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
             await ctx.send(embed=discord.Embed(color=discord.Color.green(),
                                                title='Success',
                                                description=f'#{ctx.channel} channel is now subscribed to pull requests for {repo}!')
@@ -246,19 +242,20 @@ class DiscordCollabyBot(Bot):
                 # not_found_error = discord.Embed(color=0xe74c3c, title=f'NO REPOSITORIES FOUND ERROR:', description= f'You haven\'t added any repositories to CollabyBot yet. 'f'Use /add <owner/repo-name> to add one.')
                 # not_found_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
                 await ctx.send(embed=discord.Embed(
-                                color=discord.Color.yellow(),
-                                description=f'You haven\'t added any repositories to CollabyBot yet. Use /add <owner/repo-name> to add one.'))
+                    color=discord.Color.yellow(),
+                    description=f'You haven\'t added any repositories to CollabyBot yet. Use /add <owner/repo-name> to add one.'))
             else:
                 repo_list = ''
                 for r in repos.keys():
                     repo_list += f'{r}\n'
-                repo_embed = discord.Embed(color=discord.Color.yellow(), title='Available Repositories', description=f'{repo_list}')
-                await ctx.send(f'Subscribe to one of the following added repositories using /issues <repo name>:', embed=repo_embed)
+                await ctx.send('Subscribe to one of the following added repositories using /issues <repo name>:',
+                               embed=discord.Embed(color=discord.Color.yellow(),
+                                                   description=f'{repo_list}'))
 
         elif repo not in repos.keys():  # repo hasn't been added yet
             await ctx.send(embed=discord.Embed(
                 color=discord.Color.yellow(),
-                description=f'Repository {repo} hasn\'t been added to CollabyBot yet. 'f'Use /add <owner/repo-name> to add it.')
+                description=f'Repository {repo} hasn\'t been added to CollabyBot yet. Use /add <owner/repo-name> to add it.')
             )
 
         elif channel not in issue_subscribers[repo]:  # channel isn't subscribed
@@ -268,9 +265,10 @@ class DiscordCollabyBot(Bot):
             await ctx.send(embed=subscribe_embed)
 
         else:  # channel is already subscribed
-            await ctx.send(discord.Embed(
+            await ctx.send(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 description=f'{ctx.channel} is already subscribed to to pull requests for {repo}.')
+            )
 
     @commands.command(name='add', description='Add a repo to the list of repositories you want notifications from.')
     async def add(ctx: discord.ApplicationContext, repo=''):
@@ -296,7 +294,10 @@ class DiscordCollabyBot(Bot):
             if repo.name in repos:
                 # error_embed= discord.Embed(color = 0xe67e22, title='ERROR: REPO WAS ALREADY ADDED', description=f'{repo.name} has been already added to the #{ctx.channel} channel.')
                 # error_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(f'{repo.name} has already been added.')
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.yellow(),
+                    description=f'{repo.name} has already been added.')
+                )
             else:
                 branches = repo.get_branches()  # get branches via pygithub
                 brs = [b.name for b in branches]
@@ -307,7 +308,10 @@ class DiscordCollabyBot(Bot):
                 issue_subscribers[repo.name] = []
                 # notify_embed = discord.Embed(color = 0xe91e63, title=f'{repo.name} has been added.')
                 # notify_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(f'{repo.name} has been added.')
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.green(),
+                    description=f'{repo.name} has been added.')
+                )
 
     @commands.command(name='get-repos', description='See the list of repos added to CollabyBot.')
     async def get_repos(ctx: discord.ApplicationContext):
@@ -323,10 +327,14 @@ class DiscordCollabyBot(Bot):
         if repo_list == '':
             # error_embed = discord.Embed(color = 0xe74c3c, title = 'NO REPOSITORIES FOUND ERROR:', description='You haven\'t added any repos to CollabyBot yet.')
             # error_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send('You haven\'t added any repos to CollabyBot yet.')
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                description='You haven\'t added any repos to CollabyBot yet.')
+            )
         else:
-            list_embed = discord.Embed(color=0x206694, title=f'Current repositories:', description=f'\n\n{repo_list}')
-            list_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
+            list_embed = discord.Embed(color=discord.Color.blurple(),
+                                       title=f'Current repositories:',
+                                       description=f'{repo_list}')
             await ctx.send(embed=list_embed)
 
     @commands.command(name='commits', description='Subscribe to commit notifications in this channel.')
@@ -345,38 +353,38 @@ class DiscordCollabyBot(Bot):
         """
 
         channel = ctx.message.channel.id
-        not_found_error = discord.Embed(color=0xe74c3c, title=f'NO REPOSITORIES FOUND ERROR:',
-                                        description=f'You haven\'t added any repositories to CollabyBot yet. 'f'Use /add <owner/repo-name> to add one.')
 
         if repo == '':
             if not repos:
                 # not_found_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(
-                    f'You haven\'t added any repositories to CollabyBot yet. 'f'Use /add <owner/repo-name> to add one.')
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.yellow(),
+                    description='You haven\'t added any repositories to CollabyBot yet. Use /add <owner/repo-name> to add one.')
+                )
             else:
                 repo_list = ''
                 for r in repos.keys():
                     repo_list += f'{r}\n'
-                subscribe = discord.Embed(color=0xf1c40f, title=f'AVAILABLE REPOSITORIES',
-                                          description=f'Subscribe to one of the following added repositories using /commits <repo name>:\n\n{repo_list}')
-                subscribe.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed=subscribe)
+                await ctx.send('Subscribe to one of the following added repositories using /pull-requests <repo name>:',
+                               embed=discord.Embed(color=discord.Color.yellow(),
+                                                   description=f'{repo_list}'))
         elif repo not in repos.keys():
-            action = discord.Embed(color=0xe67e22, title='ACTION: ADD REPOSITORY:',
-                                   description=f'Repository {repo} hasn\'t been added to CollabyBot yet. 'f'Use /add <owner/repo-name> to add it.')
-            action.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed=action)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                description=f'Repository {repo} hasn\'t been added to CollabyBot yet. Use /add <owner/repo-name> to add it.'))
         else:
             if branch == '':
                 for b in repos.get(repo):
                     if channel not in commit_subscribers[repo][b]:
                         commit_subscribers[repo][b].append(channel)
-                        await ctx.send(f'{ctx.channel} is now subscribed to commits for {repo} on {b}!')
+                        await ctx.send(embed=discord.Embed(
+                            color=discord.Color.green(),
+                            description=f'{ctx.channel} is now subscribed to commits for {repo} on {b}!')
+                        )
                     else:
                         subscription_error = discord.Embed(color=0xe67e22,
                                                            title='SUBSCRIPTION ERROR: ALREADY SUBSCRIBED',
                                                            description=f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.')
-                        subscription_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
                         await ctx.send(embed=subscription_error)
             else:
                 if channel not in commit_subscribers[repo][branch]:
@@ -385,7 +393,6 @@ class DiscordCollabyBot(Bot):
                 else:
                     subscription_error = discord.Embed(color=0xe67e22, title='SUBSCRIPTION ERROR: ALREADY SUBSCRIBED',
                                                        description=f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.')
-                    subscription_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
                     await ctx.send(embed=subscription_error)
 
     @commands.command(name='open-pull-requests', description='Show open pull requests in testing repo.')

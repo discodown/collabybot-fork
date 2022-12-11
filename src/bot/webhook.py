@@ -1,4 +1,3 @@
-from __future__ import print_function
 import pprint
 from CollabyBot import DiscordCollabyBot
 from github_objects import *
