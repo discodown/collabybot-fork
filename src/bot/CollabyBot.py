@@ -6,7 +6,8 @@ from github import Github
 from jira import JIRA, JIRAError
 import discord
 from discord.ext.pages import Paginator, Page
-
+from burndown import burndown
+from os import remove
 repos = {}  # repo names and list of branches
 pr_subscribers = {}  # channel ids of channels subscribed to pull requests
 commit_subscribers = {}  # channel ids of channels subscribed to commits, one list per branch
@@ -379,21 +380,25 @@ class DiscordCollabyBot(Bot):
                         commit_subscribers[repo][b].append(channel)
                         await ctx.send(embed=discord.Embed(
                             color=discord.Color.green(),
+                            title='Success',
                             description=f'{ctx.channel} is now subscribed to commits for {repo} on {b}!')
                         )
                     else:
-                        subscription_error = discord.Embed(color=0xe67e22,
-                                                           title='SUBSCRIPTION ERROR: ALREADY SUBSCRIBED',
-                                                           description=f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.')
-                        await ctx.send(embed=subscription_error)
+                        await ctx.send(embed=discord.Embed(
+                            color=discord.Color.yellow(),
+                            description=f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.'))
             else:
                 if channel not in commit_subscribers[repo][branch]:
                     commit_subscribers[repo][branch].append(channel)
-                    await ctx.send(f'{ctx.channel} is now subscribed to commits for {repo} on {branch}!')
+                    await ctx.send(embed=discord.Embed(
+                        color=discord.Color.green(),
+                        title='Success',
+                        description=f'{ctx.channel} is now subscribed to commits for {repo} on {branch}!'
+                    ))
                 else:
-                    subscription_error = discord.Embed(color=0xe67e22, title='SUBSCRIPTION ERROR: ALREADY SUBSCRIBED',
-                                                       description=f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.')
-                    await ctx.send(embed=subscription_error)
+                    await ctx.send(embed=discord.Embed(
+                        color=discord.Color.yellow(),
+                        description=f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.'))
 
     @commands.command(name='open-pull-requests', description='Show open pull requests in testing repo.')
     async def open_pull_requests(ctx: discord.ApplicationContext, repo=''):
@@ -407,7 +412,7 @@ class DiscordCollabyBot(Bot):
         :return: None
         """
 
-        openpr_embed = discord.Embed(color=0x7289da, title=f'Open pull requests in {repo}:\n')
+        openpr_embed = discord.Embed(color=discord.Color.blurple(), title=f'Open pull requests in {repo}:\n')
         # get repo via pygithub
         g = Github()
         repo = g.get_repo(repo)
@@ -456,7 +461,7 @@ class DiscordCollabyBot(Bot):
             await ctx.send('Token registered.')
 
     @commands.command(name='jira',
-                      description='Retrieves summary, description, issuetype, assignee, and parent of Jira issue.')
+                      description='Retrieves summary, description, issue type, and assignee of Jira issue.')
     async def jira_get_issue(ctx: discord.ApplicationContext):
         """
         Respond with information about a Jira issue.
@@ -485,7 +490,7 @@ class DiscordCollabyBot(Bot):
         issue_name = parts[1]
         issue = jira.issue(issue_name)
 
-        embed = discord.Embed(color=0x2ecc71, title=issue_name)
+        embed = discord.Embed(color=discord.Color.blurple(), title=issue_name)
         embed.add_field(name=f'Summary:', value=issue.fields.summary, inline=False)
         embed.add_field(name=f'Description:', value=issue.fields.description, inline=False)
         if issue.fields.assignee is None:
@@ -541,6 +546,7 @@ class DiscordCollabyBot(Bot):
         query = 'project={0} AND SPRINT not in closedSprints() AND sprint not in futureSprints()'.format(projectId)
         issues = jira.search_issues(query)
 
+        #TODO: Move to utils
         def divide_chunks(l, n):
             for i in range(0, len(l), n):
                 yield l[i:i + n]
@@ -549,7 +555,7 @@ class DiscordCollabyBot(Bot):
         embeds = []
         pages = []
         for i in range(0, len(issue_chunks)):
-            embeds.append(discord.Embed(color=discord.Color.green(), title='Jira issues:'))
+            embeds.append(discord.Embed(color=discord.Color.blurple(), title='Active Sprint'))
             for issue_name in issue_chunks[i]:
                 issue = jira.issue(issue_name)
                 embeds[i].add_field(name=f'Name:', value=issue_name, inline=False)
@@ -569,15 +575,13 @@ class DiscordCollabyBot(Bot):
         await paginator.send(ctx)
 
         # Create burndown chart
-        from burndown import burndown
         burndown_chart = burndown(jira, issues)
         with open(burndown_chart, 'rb') as f:
             picture = discord.File(f)
-            await ctx.send(file=picture)
-        from os import remove
+            await ctx.send('**Burndown Chart:**', file=picture)
         remove(burndown_chart)  # Delete chart after sending it
 
-    @commands.command(name='jira-assign', description='Assign a person to Jira Issue')
+    @commands.command(name='jira-assign', description='Assign a Jira issue to a user.')
     async def jira_assign_issue(ctx: discord.ApplicationContext):
         """
         Assign a Jira ticket to a user.
@@ -592,9 +596,11 @@ class DiscordCollabyBot(Bot):
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            embed = discord.Embed(color=discord.Color.red(), title="/jira-assign <ISSUE> <USER>")
-            embed.add_field(name='Status', value='Failed. Jira was not authenticated', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.message.author.id} is not authenticated with Jira.')
+            )
             return
 
         jiraInfo = jira_subscribers[userId]
@@ -603,12 +609,17 @@ class DiscordCollabyBot(Bot):
         parts = msg.split()
 
         if len(parts) == 1:
-            embed = discord.Embed(color=discord.Color.red(), title="Provide ticket name.")
+            embed = discord.Embed(color=discord.Color.yellow(), title="Usage")
             projects = jira.projects()
             for project in projects:
                 embed.add_field(name=project.name, value=project.id, inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Usage',
+                description='/jira-assign <TICKET_ID> <USER_ID>')
+            )
 
+        # User but no ticket
         elif len(parts) == 2 and parts[1].isdigit():
             project_name = parts[1]
             issues = []
@@ -621,39 +632,38 @@ class DiscordCollabyBot(Bot):
                 if i >= chunk.total:
                     break
 
-            embed = discord.Embed(color=discord.Color.red(), title="Active tickets: ")
+            embed = discord.Embed(color=discord.Color.yellow(), title="Available tickets: ")
             for issue in issues:
                 if issue.fields.status.name != 'Done':
                     embed.add_field(name=issue, value=issue.fields.status, inline=False)
 
             await ctx.send(embed=embed)
 
+        # Ticket but not user
         elif len(parts) == 2 and parts[1].isdigit() == False:
             ticket = parts[1]
             project_name = ticket.split('-')[0]
 
-            startIndex = 0
-            chunkSize = 25
-            length = 0
-            part = 1
-            embed_title = 'Available assignees (Part {0})'.format(part)
-            embed = discord.Embed(color=discord.Color.red(), title=embed_title)
+            #TODO: Move to utils
+            def divide_chunks(l, n):
+                for i in range(0, len(l), n):
+                    yield l[i:i + n]
 
-            while True:
-                chunk = jira.search_assignable_users_for_projects('', project_name, startAt=startIndex,
-                                                                  maxResults=chunkSize)
-                retrieved = len(chunk)
-                length += retrieved
-                startIndex += chunkSize
-                embed_title = 'Available assignees (Part {0})'.format(part)
-                part += 1
-                embed = discord.Embed(color=discord.Color.red(), title=embed_title)
-                for user in chunk:
-                    embed.add_field(name=user.displayName, value=user.accountId, inline=False)
+            users = jira.search_assignable_users_for_projects('', project_name)
+            user_chunks = list(divide_chunks(users, 12))
 
-                await ctx.send(embed=embed)
-                if length < startIndex:
-                    break
+            embeds = []
+            pages = []
+            for i in range(0, len(user_chunks)):
+                embeds.append(discord.Embed(color=discord.Color.yellow(), title='Assignable Users'))
+                for user in user_chunks[i]:
+                    embeds[i].add_field(name=user.displayName, value=user.accountId, inline=False)
+                pages.append(Page(
+                    content=f'Available assignees (Part {i+1}):',
+                    embeds=[embeds[i]])
+                )
+            paginator = Paginator(pages=pages)
+            await paginator.send(ctx)
 
         elif len(parts) == 3:
             project_name = parts[1].split('-')[0]
@@ -677,19 +687,35 @@ class DiscordCollabyBot(Bot):
                 if response.content in ['yes', 'Yes', 'y', 'Y']:
                     try:
                         jira.assign_issue(issue_name, user_name)
-                        await ctx.send(f'Successfully reassigned {issue_name} to {user_name}.')
+                        await ctx.send(embed=discord.Embed(
+                            color=discord.Color.green(),
+                            title='Success',
+                            description=f'Successfully reassigned {issue_name} to {user_name}.')
+                        )
                     except JIRAError:
-                        await ctx.send(f'No user named {user_name} was found.')
+                        await ctx.send(embed=discord.Embed(
+                            title='User Error',
+                            color=discord.Color.red(),
+                            description=f'User {user_name} not found.')
+                        )
                 else:
                     await ctx.send(f'{issue_name} will not be reassigned to {user_name}.')
             else:
                 try:
                     jira.assign_issue(issue_name, user_name)
-                    await ctx.send(f'Successfully assigned {issue_name} to {user_name}.')
+                    await ctx.send(embed=discord.Embed(
+                        color=discord.Color.green(),
+                        title='Success',
+                        description=f'Successfully reassigned {issue_name} to {user_name}.')
+                    )
                 except JIRAError:
-                    await ctx.send(f'No user named {user_name} was found.')
+                    await ctx.send(embed=discord.Embed(
+                        title='User Error',
+                        color=discord.Color.red(),
+                        description=f'User {user_name} not found.')
+                    )
 
-    @commands.command(name='jira-unassign', description='Unassigns a person from Jira Issue')
+    @commands.command(name='jira-unassign', description='Unassign a Jira issue.')
     async def jira_unassign_issue(ctx: discord.ApplicationContext):
         """
         Unassign a user from a Jira issue that has already been assigned to someone.
@@ -702,26 +728,32 @@ class DiscordCollabyBot(Bot):
         parts = msg.split()
 
         if len(parts) != 2:
-            embed = discord.Embed(color=discord.Color.red(), title="/jira-unassign <ISSUE>")
-            embed.add_field(name='Status', value='Failed. Wrong input', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Usage',
+                description='/jira-unassign <ISSUE_ID>')
+            )
             return
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            embed = discord.Embed(color=discord.Color.red(), title="/jira-unassign <ISSUE>")
-            embed.add_field(name='Status', value='Failed. Jira was not authenticated', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.message.author.id} is not authenticated with Jira.')
+            )
             return
 
         jiraInfo = jira_subscribers[userId]
         jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
-        embed = discord.Embed(color=discord.Color.green(), title="/jira-unassign <ISSUE>")
         issue_name = parts[1]
         jira.assign_issue(issue_name, None)
-        embed.add_field(name='Status', value='Success', inline=False)
-        await ctx.send(embed=embed)
+        await ctx.send(embed=discord.Embed(
+            color=discord.Color.green(),
+            title='Success',
+            description=f'{issue_name} has been unassigned.')
+        )
 
     @classmethod
     def add_all_commands(cls, bot):
