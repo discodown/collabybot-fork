@@ -160,7 +160,8 @@ async def payload_handler_pr(
         pass
     # TODO: Add status check
     PR = PullRequest(payload_json.get('action'), payload_json["pull_request"]["body"],
-                     payload_json["repository"]["full_name"], timestamp, payload_json["pull_request"]["url"],
+                     payload_json["repository"]["full_name"], timestamp,
+                     payload_json["pull_request"]["html_url"],
                      payload_json["pull_request"]["user"]["login"], reviewer_requested, reviewer, review_body, pr_state)
     await discordBot.send_payload_message(PR.object_string(), event='pull_request', repo=repo, branch=branch)
 
