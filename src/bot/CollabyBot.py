@@ -517,9 +517,11 @@ class DiscordCollabyBot(Bot):
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            embed = discord.Embed(color=discord.Color.red(), title="Command Error")
-            embed.add_field(name='Status', value='Failed. Jira was not authenticated.', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.message.author.id} is not authenticated with Jira.')
+            )
             return
 
         jiraInfo = jira_subscribers[userId]
