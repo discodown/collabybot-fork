@@ -133,7 +133,7 @@ class JiraCog(commands.Cog):
 
     @commands.command(name='jira-issue',
                       description='Get summary, description, issue type, and assignee of a Jira issue.')
-    async def jira_get_issue(self, ctx: discord.ApplicationContext):
+    async def jira_get_issue(self, ctx: discord.ApplicationContext, issue_id=''):
         """
         Respond with information about a Jira issue.
 
@@ -145,42 +145,37 @@ class JiraCog(commands.Cog):
         """
 
         userId = ctx.message.author.id
-        msg = ctx.message.content
-        parts = msg.split()
-        if len(parts) != 2:
+        if issue_id == '':
             await ctx.send(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 title='Usage',
                 description='/jira-issue <ISSUE_ID>')
             )
-            return
-
-        tokenExists = (userId in jira_subscribers)
-        if tokenExists == False:
-            await ctx.send(embed=discord.Embed(
-                color=discord.Color.red(),
-                title='Authentication Error',
-                description=f'User {ctx.message.author.name} is not authenticated with Jira.')
-            )
-            return
-
-        jiraInfo = jira_subscribers[userId]
-        jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
-        issue_name = parts[1]
-        issue = jira.issue(issue_name)
-
-        embed = discord.Embed(color=discord.Color.blurple(), title=issue_name)
-        embed.add_field(name=f'Summary:', value=issue.fields.summary, inline=False)
-        embed.add_field(name=f'Description:', value=issue.fields.description, inline=False)
-        if issue.fields.assignee is None:
-            embed.add_field(name=f'Assignee:', value='Unassigned', inline=False)
         else:
-            embed.add_field(name=f'Assignee:', value=issue.fields.assignee.displayName, inline=False)
-        embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
-        await ctx.send(embed=embed)
+            tokenExists = (userId in jira_subscribers)
+            if tokenExists == False:
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.red(),
+                    title='Authentication Error',
+                    description=f'User {ctx.message.author.name} is not authenticated with Jira.')
+                )
+            else:
+                jiraInfo = jira_subscribers[userId]
+                jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
+                issue = jira.issue(issue_id)
+
+                embed = discord.Embed(color=discord.Color.blurple(), title=issue_id)
+                embed.add_field(name=f'Summary:', value=issue.fields.summary, inline=False)
+                embed.add_field(name=f'Description:', value=issue.fields.description, inline=False)
+                if issue.fields.assignee is None:
+                    embed.add_field(name=f'Assignee:', value='Unassigned', inline=False)
+                else:
+                    embed.add_field(name=f'Assignee:', value=issue.fields.assignee.displayName, inline=False)
+                embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
+                await ctx.send(embed=embed)
 
     @commands.command(name='jira-sprint', description='Get summary of a project\'s active sprint.')
-    async def jira_get_sprint(self, ctx: discord.ApplicationContext):
+    async def jira_get_sprint(self, ctx: discord.ApplicationContext, project_id=''):
         """
         Get information about the current sprint in a Jira project.
 
@@ -206,64 +201,60 @@ class JiraCog(commands.Cog):
         jiraInfo = jira_subscribers[userId]
         jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
-        parts = msg.split()
-
         # No args
-        if len(parts) == 1:
-            embed = discord.Embed(color=discord.Color.red(), title="Provide one of the project IDs:")
+        if project_id == '':
+            await ctx.send(embed=discord.Embed(
+                title='Usage',
+                color=discord.Color.yellow(),
+                description='/sprint <PROJECT_ID>')
+            )
+            embed = discord.Embed(color=discord.Color.yellow(), title="Available Projects")
             projects = jira.projects()
             for project in projects:
-                embed.add_field(name=project.name, value=project.id, inline=False)
+                embed.add_field(name=project.name, value=f'Project ID: {project.id}', inline=False)
             await ctx.send(embed=embed)
-            return
+        else:
+            # Find issues from the project's current sprint using JQL query
+            query = 'project={0} AND SPRINT not in closedSprints() AND sprint not in futureSprints()'.format(project_id)
+            issues = jira.search_issues(query)
 
-        if len(parts) > 2:
-            embed = discord.Embed(color=discord.Color.red(), title="Too many args.")
-            await ctx.send(embed=embed)
-            return
+            # TODO: Move to utils
+            def divide_chunks(l, n):
+                for i in range(0, len(l), n):
+                    yield l[i:i + n]
 
-        # Find issues from the project's current sprint using JQL query
-        projectId = parts[1]
-        query = 'project={0} AND SPRINT not in closedSprints() AND sprint not in futureSprints()'.format(projectId)
-        issues = jira.search_issues(query)
+            issue_chunks = list(divide_chunks(issues, 4))
+            embeds = []
+            pages = []
+            for i in range(0, len(issue_chunks)):
+                embeds.append(discord.Embed(color=discord.Color.blurple(), title='Active Sprint'))
+                for issue_name in issue_chunks[i]:
+                    issue = jira.issue(issue_name)
+                    embeds[i].add_field(name=f'Name:', value=issue_name, inline=False)
+                    embeds[i].add_field(name=f'Summary:', value=issue.fields.summary, inline=False)
+                    embeds[i].add_field(name=f'Description:', value=issue.fields.description, inline=False)
+                    if issue.fields.assignee is None:
+                        embeds[i].add_field(name=f'Assignee:', value='Unassigned', inline=False)
+                    else:
+                        embeds[i].add_field(name=f'Assignee:', value=issue.fields.assignee.displayName, inline=False)
+                    embeds[i].add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
+                    embeds[i].add_field(name=chr(173), value=chr(173))
+                pages.append(Page(
+                    content=f'Page {i + 1} of sprint board:',
+                    embeds=[embeds[i]]
+                ))
+            paginator = Paginator(pages=pages)
+            await paginator.send(ctx)
 
-        # TODO: Move to utils
-        def divide_chunks(l, n):
-            for i in range(0, len(l), n):
-                yield l[i:i + n]
-
-        issue_chunks = list(divide_chunks(issues, 4))
-        embeds = []
-        pages = []
-        for i in range(0, len(issue_chunks)):
-            embeds.append(discord.Embed(color=discord.Color.blurple(), title='Active Sprint'))
-            for issue_name in issue_chunks[i]:
-                issue = jira.issue(issue_name)
-                embeds[i].add_field(name=f'Name:', value=issue_name, inline=False)
-                embeds[i].add_field(name=f'Summary:', value=issue.fields.summary, inline=False)
-                embeds[i].add_field(name=f'Description:', value=issue.fields.description, inline=False)
-                if issue.fields.assignee is None:
-                    embeds[i].add_field(name=f'Assignee:', value='Unassigned', inline=False)
-                else:
-                    embeds[i].add_field(name=f'Assignee:', value=issue.fields.assignee.displayName, inline=False)
-                embeds[i].add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
-                embeds[i].add_field(name=chr(173), value=chr(173))
-            pages.append(Page(
-                content=f'Page {i + 1} of sprint board:',
-                embeds=[embeds[i]]
-            ))
-        paginator = Paginator(pages=pages)
-        await paginator.send(ctx)
-
-        # Create burndown chart
-        burndown_chart = self.burndown(jira, issues)
-        with open(burndown_chart, 'rb') as f:
-            picture = discord.File(f)
-            await ctx.send('**Burndown Chart:**', file=picture)
-        remove(burndown_chart)  # Delete chart after sending it
+            # Create burndown chart
+            burndown_chart = self.burndown(jira, issues)
+            with open(burndown_chart, 'rb') as f:
+                picture = discord.File(f)
+                await ctx.send('**Burndown Chart:**', file=picture)
+            remove(burndown_chart)  # Delete chart after sending it
 
     @commands.command(name='jira-assign', description='Assign a Jira issue to a user.')
-    async def jira_assign_issue(self, ctx: discord.ApplicationContext):
+    async def jira_assign_issue(self, ctx: discord.ApplicationContext, issue_id='', user_id=''):
         """
         Assign a Jira ticket to a user.
 
@@ -273,7 +264,6 @@ class JiraCog(commands.Cog):
         """
 
         userId = ctx.message.author.id
-        msg = ctx.message.content
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
@@ -287,14 +277,12 @@ class JiraCog(commands.Cog):
         jiraInfo = jira_subscribers[userId]
         jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
-        parts = msg.split()
-
         # TODO: Move to utils
         def divide_chunks(l, n):
             for i in range(0, len(l), n):
                 yield l[i:i + n]
 
-        if len(parts) == 1:
+        if issue_id == '' and user_id == '':
             # projects = jira.projects()
             # for project in projects:
             # embed.add_field(name=project.name, value=project.id, inline=False)
@@ -306,29 +294,28 @@ class JiraCog(commands.Cog):
 
         # TODO: Move to get-issues command
         # User but no ticket
-        elif len(parts) == 2 and parts[1].isdigit():
-            project_name = parts[1]
-            issues = []
-            i = 0
-            chunk_size = 500
-            while True:
-                chunk = jira.search_issues(f'project = {project_name}', startAt=i, maxResults=chunk_size)
-                i += chunk_size
-                issues += chunk.iterable
-                if i >= chunk.total:
-                    break
-
-            embed = discord.Embed(color=discord.Color.yellow(), title="Available tickets: ")
-            for issue in issues:
-                if issue.fields.status.name != 'Done':
-                    embed.add_field(name=issue, value=issue.fields.status, inline=False)
-
-            await ctx.send(embed=embed)
+        # elif len(parts) == 2 and parts[1].isdigit():
+        #     project_name = parts[1]
+        #     issues = []
+        #     i = 0
+        #     chunk_size = 500
+        #     while True:
+        #         chunk = jira.search_issues(f'project = {project_name}', startAt=i, maxResults=chunk_size)
+        #         i += chunk_size
+        #         issues += chunk.iterable
+        #         if i >= chunk.total:
+        #             break
+        #
+        #     embed = discord.Embed(color=discord.Color.yellow(), title="Available tickets: ")
+        #     for issue in issues:
+        #         if issue.fields.status.name != 'Done':
+        #             embed.add_field(name=issue, value=issue.fields.status, inline=False)
+        #
+        #     await ctx.send(embed=embed)
 
         # Ticket but not user
-        elif len(parts) == 2 and parts[1].isdigit() == False:
-            ticket = parts[1]
-            project_name = ticket.split('-')[0]
+        elif user_id == '':
+            project_name = issue_id.split('-')[0]
 
             users = jira.search_assignable_users_for_projects('', project_name, maxResults=500)
             user_chunks = list(divide_chunks(users, 12))
@@ -346,8 +333,8 @@ class JiraCog(commands.Cog):
             paginator = Paginator(pages=pages)
             await paginator.send(ctx)
 
-        elif len(parts) == 3:
-            project_name = parts[1].split('-')[0]
+        else:
+            project_name = issue_id.split('-')[0]
             users_dict = {}
             # TODO: Deal with max results
             users = jira.search_assignable_users_for_projects('', project_name, maxResults=200)
@@ -355,24 +342,22 @@ class JiraCog(commands.Cog):
             for user in users:
                 users_dict[user.accountId] = user.displayName
 
-            issue_name = parts[1]
-
-            if parts[2][0].isnumeric():  # account ID
-                user_name = users_dict.get(parts[2])
+            if user_id.isnumeric():  # account ID
+                user_name = users_dict.get(user_id)
             else:  # Given name
-                user_name = parts[2]
+                user_name = user_id
 
-            issue = jira.issue(issue_name)
+            issue = jira.issue(issue_id)
             if issue.fields.assignee is not None:
-                await ctx.send(f'{issue_name} is already assigned to {issue.fields.assignee}. Reassign to {user_name}?')
+                await ctx.send(f'{issue_id} is already assigned to {issue.fields.assignee}. Reassign to {user_name}?')
                 response = await ctx.bot.wait_for('message', timeout=20.0)
                 if response.content in ['yes', 'Yes', 'y', 'Y']:
                     try:
-                        jira.assign_issue(issue_name, user_name)
+                        jira.assign_issue(issue_id, user_name)
                         await ctx.send(embed=discord.Embed(
                             color=discord.Color.green(),
                             title='Success',
-                            description=f'Successfully reassigned {issue_name} to {user_name}.')
+                            description=f'Successfully reassigned {issue_id} to {user_name}.')
                         )
                     except JIRAError:
                         await ctx.send(embed=discord.Embed(
@@ -381,14 +366,14 @@ class JiraCog(commands.Cog):
                             description=f'User {user_name} not found.')
                         )
                 else:
-                    await ctx.send(f'{issue_name} will not be reassigned to {user_name}.')
+                    await ctx.send(f'{issue_id} will not be reassigned to {user_name}.')
             else:
                 try:
-                    jira.assign_issue(issue_name, user_name)
+                    jira.assign_issue(issue_id, user_name)
                     await ctx.send(embed=discord.Embed(
                         color=discord.Color.green(),
                         title='Success',
-                        description=f'Successfully reassigned {issue_name} to {user_name}.')
+                        description=f'Successfully reassigned {issue_id} to {user_name}.')
                     )
                 except JIRAError:
                     await ctx.send(embed=discord.Embed(
@@ -398,7 +383,7 @@ class JiraCog(commands.Cog):
                     )
 
     @commands.command(name='jira-unassign', description='Unassign a Jira issue.')
-    async def jira_unassign_issue(self, ctx: discord.ApplicationContext):
+    async def jira_unassign_issue(self, ctx: discord.ApplicationContext, issue_id=''):
         """
         Unassign a user from a Jira issue that has already been assigned to someone.
 
@@ -409,31 +394,31 @@ class JiraCog(commands.Cog):
         msg = ctx.message.content
         parts = msg.split()
 
-        if len(parts) != 2:
+        if issue_id == '':
             await ctx.send(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 title='Usage',
                 description='/jira-unassign <ISSUE_ID>')
             )
             return
+        else:
+            tokenExists = (userId in jira_subscribers)
+            if tokenExists == False:
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.red(),
+                    title='Authentication Error',
+                    description=f'User {ctx.message.author.name} is not authenticated with Jira.')
+                )
+                return
 
-        tokenExists = (userId in jira_subscribers)
-        if tokenExists == False:
+            jiraInfo = jira_subscribers[userId]
+            jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
+
+            issue_name = parts[1]
+            jira.assign_issue(issue_name, None)
             await ctx.send(embed=discord.Embed(
-                color=discord.Color.red(),
-                title='Authentication Error',
-                description=f'User {ctx.message.author.name} is not authenticated with Jira.')
+                color=discord.Color.green(),
+                title='Success',
+                description=f'{issue_name} has been unassigned.')
             )
-            return
-
-        jiraInfo = jira_subscribers[userId]
-        jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
-
-        issue_name = parts[1]
-        jira.assign_issue(issue_name, None)
-        await ctx.send(embed=discord.Embed(
-            color=discord.Color.green(),
-            title='Success',
-            description=f'{issue_name} has been unassigned.')
-        )
 
