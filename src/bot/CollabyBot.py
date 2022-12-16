@@ -173,7 +173,7 @@ class DiscordCollabyBot(Bot):
         """
         await ctx.send('Pong.')
 
-    @commands.command(name='pull-requests', description='Subscribe to pull request notifications in this channel.')
+    @commands.command(name='gh-pull-requests', description='Subscribe to pull request notifications in this channel.')
     async def pull_requests(ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to pull request notifications.
@@ -223,7 +223,7 @@ class DiscordCollabyBot(Bot):
                 description=f'{ctx.channel} is already subscribed to to pull requests for {repo}.')
             )
 
-    @commands.command(name='issues', description="Subscribe to issue notifications in this channel.")
+    @commands.command(name='gh-issues', description="Subscribe to issue notifications in this channel.")
     async def issues(ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to issue notifications.
@@ -271,7 +271,7 @@ class DiscordCollabyBot(Bot):
                 description=f'{ctx.channel} is already subscribed to to pull requests for {repo}.')
             )
 
-    @commands.command(name='add', description='Add a repo to the list of repositories you want notifications from.')
+    @commands.command(name='gh-add', description='Add a repo to the list of repositories you want notifications from.')
     async def add(ctx: discord.ApplicationContext, repo=''):
         """
         Add a repository to CollabyBot's list of repositories.
@@ -314,7 +314,7 @@ class DiscordCollabyBot(Bot):
                     description=f'{repo.name} has been added.')
                 )
 
-    @commands.command(name='get-repos', description='See the list of repos added to CollabyBot.')
+    @commands.command(name='gh-get-repos', description='See the list of repos added to CollabyBot.')
     async def get_repos(ctx: discord.ApplicationContext):
         """
         Get a list of repositories added to CollabyBot.
@@ -338,7 +338,7 @@ class DiscordCollabyBot(Bot):
                                        description=f'{repo_list}')
             await ctx.send(embed=list_embed)
 
-    @commands.command(name='commits', description='Subscribe to commit notifications in this channel.')
+    @commands.command(name='gh-commits', description='Subscribe to commit notifications in this channel.')
     async def commits(ctx: discord.ApplicationContext, repo='', branch=''):
         """
         Subscribe a channel to commit notifications.
@@ -400,7 +400,7 @@ class DiscordCollabyBot(Bot):
                         color=discord.Color.yellow(),
                         description=f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.'))
 
-    @commands.command(name='open-pull-requests', description='Show open pull requests in testing repo.')
+    @commands.command(name='gh-open-pull-requests', description='Show open pull requests in testing repo.')
     async def open_pull_requests(ctx: discord.ApplicationContext, repo=''):
         """
         Get a list of a repository's open pull requests.
@@ -460,7 +460,7 @@ class DiscordCollabyBot(Bot):
             jira_subscribers[userId] = jiraInfo
             await ctx.send('Token registered.')
 
-    @commands.command(name='jira',
+    @commands.command(name='jira-issue',
                       description='Retrieves summary, description, issue type, and assignee of Jira issue.')
     async def jira_get_issue(ctx: discord.ApplicationContext):
         """
@@ -477,12 +477,20 @@ class DiscordCollabyBot(Bot):
         msg = ctx.message.content
         parts = msg.split()
         if len(parts) != 2:
-            await ctx.send("To get a summary of an issue, pass an issue ID as an argument like this: '/jira EX-123'")
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Usage',
+                description='/jira-issue <ISSUE_ID>')
+            )
             return
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            await ctx.send("You haven't set up a token yet. Use the /jira-setup-token command to add one.")
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.message.author.id} is not authenticated with Jira.')
+            )
             return
 
         jiraInfo = jira_subscribers[userId]
@@ -500,7 +508,7 @@ class DiscordCollabyBot(Bot):
         embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
         await ctx.send(embed=embed)
 
-    @commands.command(name='sprint', description='Returns sprint summary')
+    @commands.command(name='jira-sprint', description='Returns sprint summary')
     async def jira_get_sprint(ctx: discord.ApplicationContext):
         """
         Get information about the current sprint in a Jira project.
@@ -610,8 +618,12 @@ class DiscordCollabyBot(Bot):
 
         parts = msg.split()
 
+        # TODO: Move to utils
+        def divide_chunks(l, n):
+            for i in range(0, len(l), n):
+                yield l[i:i + n]
+
         if len(parts) == 1:
-            embed = discord.Embed(color=discord.Color.yellow(), title="Usage")
             projects = jira.projects()
             for project in projects:
                 embed.add_field(name=project.name, value=project.id, inline=False)
@@ -621,6 +633,7 @@ class DiscordCollabyBot(Bot):
                 description='/jira-assign <TICKET_ID> <USER_ID>')
             )
 
+        #TODO: Move to get-issues command
         # User but no ticket
         elif len(parts) == 2 and parts[1].isdigit():
             project_name = parts[1]
@@ -645,11 +658,6 @@ class DiscordCollabyBot(Bot):
         elif len(parts) == 2 and parts[1].isdigit() == False:
             ticket = parts[1]
             project_name = ticket.split('-')[0]
-
-            #TODO: Move to utils
-            def divide_chunks(l, n):
-                for i in range(0, len(l), n):
-                    yield l[i:i + n]
 
             users = jira.search_assignable_users_for_projects('', project_name)
             user_chunks = list(divide_chunks(users, 12))
