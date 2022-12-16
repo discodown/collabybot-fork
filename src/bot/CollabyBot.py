@@ -6,6 +6,8 @@ from github import Github
 from jira import JIRA, JIRAError
 import discord
 from discord.ext.pages import Paginator, Page
+from burndown import burndown
+from os import remove
 
 repos = {}  # repo names and list of branches
 pr_subscribers = {}  # channel ids of channels subscribed to pull requests
@@ -120,18 +122,23 @@ class DiscordCollabyBot(Bot):
         :param event: The event type of the payload.
         :return: None
         """
-        embed = discord.Embed(color=discord.Color.green(), title='GitHub Event Notification')
 
         if event == 'pull_request':
+            embed = discord.Embed(title='GitHub Event Notification',
+                                  color=discord.Color.teal())
             embed.add_field(name='Pull Request', value=payload, inline=False)
             for channel in pr_subscribers[repo]:
                 await self.get_channel(int(channel)).send(embed=embed)
         elif event == 'issue':
+            embed = discord.Embed(title='GitHub Event Notification',
+                                  color=discord.Color.magenta())
             embed.add_field(name='Issue', value=payload, inline=False)
             for channel in issue_subscribers[repo]:
                 await self.get_channel(int(channel)).send(embed=embed)
         elif event == 'push':
             try:
+                embed = discord.Embed(title='GitHub Event Notification',
+                                      color=discord.Color.purple())
                 embed.add_field(name='Commit', value=payload, inline=False)
                 for channel in commit_subscribers.get(repo).get(branch):
                     await self.get_channel(int(channel)).send(embed=embed)
@@ -148,7 +155,7 @@ class DiscordCollabyBot(Bot):
         pass
 
     @commands.command(name='commands', description='List all supported commands.')
-    async def get_commands(ctx : discord.ApplicationContext):
+    async def get_commands(ctx: discord.ApplicationContext):
         """
         Send a message listing all of CollabyBot's Discord slash commands.
 
@@ -156,18 +163,13 @@ class DiscordCollabyBot(Bot):
 
         :return: None
         """
-        embed = discord.Embed(color=0x2ecc71, title=f'Here\'s a list of commands you can use:\n')
-        help_str = ""
+        embed = discord.Embed(color=discord.Color.blurple(), title=f'Here\'s a list of commands you can use:\n')
         for command in ctx.bot.commands:
-            # help_str += ('\t\t' + '**' + command.name + '** : ' + command.description + '\n')
             embed.add_field(name=f'/{command.name}:', value=f'{command.description}', inline=False)
-        embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-        # embed = discord.Embed(color=0x2ecc71, title = f'Here\'s a list of commands you can use:\n', description=f'{help_str}')
         await ctx.send(embed=embed)
-        # await ctx.send(f'Here\'s a list of commands you can use:\n{help_str}')
 
     @commands.command(name='ping', description='Respond with pong')
-    async def ping(ctx : discord.ApplicationContext):
+    async def ping(ctx: discord.ApplicationContext):
         """
         Send 'pong' in response to 'ping'.
 
@@ -175,12 +177,10 @@ class DiscordCollabyBot(Bot):
 
         :return: None
         """
-        pong_embed = discord.Embed(color = 0x2ecc71, title = 'pong' )
-        pong_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-        await ctx.send(embed = pong_embed)
+        await ctx.send('Pong.')
 
-    @commands.command(name='pull-requests', description='Subscribe to pull request notifications in this channel.')
-    async def pull_requests(ctx : discord.ApplicationContext, repo=''):
+    @commands.command(name='gh-pull-requests', description='Subscribe to pull request notifications in this channel.')
+    async def pull_requests(ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to pull request notifications.
 
@@ -194,34 +194,49 @@ class DiscordCollabyBot(Bot):
         channel = ctx.message.channel.id
 
         if repo == '':
+            await ctx.send(embed=discord.Embed(
+                title='Usage',
+                color=discord.Color.yellow(),
+                description='/gh-pull-requests <REPO_NAME>')
+            )
             if not repos:
-                not_found_error = discord.Embed(color=0xe74c3c, title=f'NO REPOSITORIES FOUND ERROR:', description= f'You haven\'t added any repositories to CollabyBot yet. 'f'Use /add <owner/repo-name> to add one.')
-                not_found_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed = not_found_error)
-                #await(ctx.send(f'You haven\'t added any repositories to CollabyBot yet. 'f'Use /add <owner/repo-name> to add one.'))
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.yellow(),
+                    description='You haven\'t added any repositories to CollabyBot yet. '
+                                'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add one.')
+                )
             else:
                 repo_list = ''
                 for r in repos.keys():
                     repo_list += f'{r}\n'
-                
-                subscribe = discord.Embed(color = 0xf1c40f, title=f'AVAILABLE REPOSITORIES TO SUBSCRIBE:', description = f'Subscribe to one of the following added repositories using /pull-requests <repo name>:\n\n{repo_list}')
-                subscribe.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed =subscribe)
+                await ctx.send('Subscribe to one of the following added repositories using '
+                               '**/gh-pull-requests <REPO_NAME>**:',
+                               embed=discord.Embed(color=discord.Color.yellow(),
+                                                   description=f'{repo_list}'
+                                                   )
+                               )
         elif repo not in repos.keys():
 
-            action = discord.Embed(color = 0xe67e22, title = 'ACTION: ADD REPOSITORY:', description= f'Repository {repo} hasn\'t been added to CollabyBot yet. 'f'Use /add <owner/repo-name> to add it.')
-            action.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed = action)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                description=f'Repository {repo} hasn\'t been added to CollabyBot yet. '
+                            f'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add it.'
+            )
+            )
         elif channel not in pr_subscribers[repo]:
             pr_subscribers[repo].append(channel)
-            subscribe_embed = discord.Embed(color = 0x9b59b6, title = f'#{ctx.channel} channel is now subscribed to pull requests for {repo}!' )
-            subscribe_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed = subscribe_embed)
+            await ctx.send(embed=discord.Embed(color=discord.Color.green(),
+                                               title='Success',
+                                               description=f'#{ctx.channel} channel is now subscribed to pull requests for {repo}!')
+                           )
         else:
-            await ctx.send(f'{ctx.channel} is already subscribed to to pull requests for {repo}.')
- 
-    @commands.command(name='issues', description="Subscribe to issue notifications in this channel.")
-    async def issues(ctx : discord.ApplicationContext, repo=''):
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                description=f'#{ctx.channel} is already subscribed to to pull requests for {repo}.')
+            )
+
+    @commands.command(name='gh-issues', description="Subscribe to issue notifications in this channel.")
+    async def issues(ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to issue notifications.
 
@@ -235,36 +250,46 @@ class DiscordCollabyBot(Bot):
         channel = ctx.message.channel.id
 
         if repo == '':
+            await ctx.send(embed=discord.Embed(
+                title='Usage',
+                color=discord.Color.yellow(),
+                description='/gh-issues <REPO_NAME>')
+            )
             if not repos:  # no repos added yet
 
-                not_found_error = discord.Embed(color=0xe74c3c, title=f'NO REPOSITORIES FOUND ERROR:', description= f'You haven\'t added any repositories to CollabyBot yet. 'f'Use /add <owner/repo-name> to add one.')
-                not_found_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed = not_found_error)
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.yellow(),
+                    description=f'You haven\'t added any repositories to CollabyBot yet. '
+                                f'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add one.'))
             else:
                 repo_list = ''
                 for r in repos.keys():
                     repo_list += f'{r}\n'
-                
-                subscribe = discord.Embed(color = 0xf1c40f, title=f'AVAILABLE REPOSITORIES TO SUBSCRIBE:', description = f'Subscribe to one of the following added repositories using /issues <repo name>:\n\n{repo_list}')
-                subscribe.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed =subscribe)
+                await ctx.send('Subscribe to one of the following added repositories using **/gh-issues <REPO_NAME>**:',
+                               embed=discord.Embed(color=discord.Color.yellow(),
+                                                   description=f'{repo_list}'))
 
         elif repo not in repos.keys():  # repo hasn't been added yet
-            action = discord.Embed(color = 0xe67e22, title = 'ACTION: ADD REPOSITORY:', description= f'Repository {repo} hasn\'t been added to CollabyBot yet. 'f'Use /add <owner/repo-name> to add it.')
-            action.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed = action)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                description=f'Repository {repo} hasn\'t been added to CollabyBot yet. '
+                            f'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add it.')
+            )
 
         elif channel not in issue_subscribers[repo]:  # channel isn't subscribed
             issue_subscribers[repo].append(channel)
-            subscribe_embed = discord.Embed(color = 0x9b59b6, title = f'#{ctx.channel} channel is now subscribed to issues for {repo}!' )
-            subscribe_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed = subscribe_embed)
+            subscribe_embed = discord.Embed(color=discord.Color.green(), title='Success',
+                                            description=f'#{ctx.channel} channel is now subscribed to issues for {repo}!')
+            await ctx.send(embed=subscribe_embed)
 
         else:  # channel is already subscribed
-            await ctx.send(f'{ctx.channel} is already subscribed to to pull requests for {repo}.')
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                description=f'#{ctx.channel} is already subscribed to to pull requests for {repo}.')
+            )
 
-    @commands.command(name='add', description='Add a repo to the list of repositories you want notifications from.')
-    async def add(ctx : discord.ApplicationContext, repo=''):
+    @commands.command(name='gh-add', description='Add a repo to the list of repositories you want notifications from.')
+    async def add(ctx: discord.ApplicationContext, repo=''):
         """
         Add a repository to CollabyBot's list of repositories.
 
@@ -278,18 +303,20 @@ class DiscordCollabyBot(Bot):
         """
 
         if repo == '':
-            add_embed = discord.Embed(color = 0x206694, title='ACTION: ADD REPOSITORY', description='Add a repo to the list of repositories you want notifications from like this:'
-                           ' /add <owner/repo-name>.')
-            add_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed = add_embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Usage',
+                description=f'/gh-add <REPO_OWNER>/<REPO_NAME>')
+            )
         else:
             # get repo via pygithub
             g = Github()
             repo = g.get_repo(repo)
             if repo.name in repos:
-                error_embed= discord.Embed(color = 0xe67e22, title='ERROR: REPO WAS ALREADY ADDED', description=f'{repo.name} has been already added to the #{ctx.channel} channel')
-                error_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed = error_embed)
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.yellow(),
+                    description=f'{repo.name} has already been added.')
+                )
             else:
                 branches = repo.get_branches()  # get branches via pygithub
                 brs = [b.name for b in branches]
@@ -298,12 +325,14 @@ class DiscordCollabyBot(Bot):
                 commit_subscribers[repo.name] = {b: [] for b in brs}
                 pr_subscribers[repo.name] = []
                 issue_subscribers[repo.name] = []
-                notify_embed = discord.Embed(color = 0xe91e63, title=f'{repo.name} has been added.')
-                notify_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed = notify_embed)
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.green(),
+                    title='Success',
+                    description=f'{repo.name} has been added.')
+                )
 
-    @commands.command(name='get-repos', description='See the list of repos added to CollabyBot.')
-    async def get_repos(ctx : discord.ApplicationContext):
+    @commands.command(name='gh-get-repos', description='See the list of repos added to CollabyBot.')
+    async def get_repos(ctx: discord.ApplicationContext):
         """
         Get a list of repositories added to CollabyBot.
 
@@ -314,16 +343,18 @@ class DiscordCollabyBot(Bot):
         for r in repos.keys():
             repo_list += f'{r}\n'
         if repo_list == '':
-            error_embed = discord.Embed(color = 0xe74c3c, title = 'NO REPOSITORIES FOUND ERROR:', description='You haven\'t added any repos to CollabyBot yet.')
-            error_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed = error_embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                description='You haven\'t added any repos to CollabyBot yet.')
+            )
         else:
-            list_embed=discord.Embed(color = 0x206694, title= f'Current repositories:', description=f'\n\n{repo_list}' )
-            list_embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed = list_embed)
+            list_embed = discord.Embed(color=discord.Color.blurple(),
+                                       title=f'Current repositories:',
+                                       description=f'{repo_list}')
+            await ctx.send(embed=list_embed)
 
-    @commands.command(name='commits', description='Subscribe to commit notifications in this channel.')
-    async def commits(ctx : discord.ApplicationContext, repo='', branch=''):
+    @commands.command(name='gh-commits', description='Subscribe to commit notifications in this channel.')
+    async def commits(ctx: discord.ApplicationContext, repo='', branch=''):
         """
         Subscribe a channel to commit notifications.
 
@@ -338,44 +369,62 @@ class DiscordCollabyBot(Bot):
         """
 
         channel = ctx.message.channel.id
-        not_found_error = discord.Embed(color=0xe74c3c, title=f'NO REPOSITORIES FOUND ERROR:', description= f'You haven\'t added any repositories to CollabyBot yet. 'f'Use /add <owner/repo-name> to add one.')
 
         if repo == '':
+            await ctx.send(embed=discord.Embed(
+                title='Usage',
+                color=discord.Color.yellow(),
+                description='/gh-commits <REPO_NAME> [BRANCH_NAME]')
+            )
             if not repos:
-                not_found_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed = not_found_error)
+                # not_found_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.yellow(),
+                    description='You haven\'t added any repositories to CollabyBot yet. '
+                                'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add one.')
+                )
             else:
                 repo_list = ''
                 for r in repos.keys():
                     repo_list += f'{r}\n'
-                subscribe = discord.Embed(color = 0xf1c40f, title=f'AVAILABLE REPOSITORIES TO SUBSCRIBE:', description = f'Subscribe to one of the following added repositories using /commits <repo name>:\n\n{repo_list}')
-                subscribe.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                await ctx.send(embed =subscribe)
+                await ctx.send('Subscribe to one of the following added repositories '
+                               'using **/gh-commits <REPO_NAME> [BRANCH_NAME]**:',
+                               embed=discord.Embed(color=discord.Color.yellow(),
+                                                   description=f'{repo_list}'))
         elif repo not in repos.keys():
-            action = discord.Embed(color = 0xe67e22, title = 'ACTION: ADD REPOSITORY:', description= f'Repository {repo} hasn\'t been added to CollabyBot yet. 'f'Use /add <owner/repo-name> to add it.')
-            action.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-            await ctx.send(embed = action)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                description=f'Repository {repo} hasn\'t been added to CollabyBot yet. '
+                            f'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add it.'))
         else:
             if branch == '':
                 for b in repos.get(repo):
                     if channel not in commit_subscribers[repo][b]:
                         commit_subscribers[repo][b].append(channel)
-                        await ctx.send(f'{ctx.channel} is now subscribed to commits for {repo} on {b}!')
+                        await ctx.send(embed=discord.Embed(
+                            color=discord.Color.green(),
+                            title='Success',
+                            description=f'#{ctx.channel} is now subscribed to commits for {repo} on {b}!')
+                        )
                     else:
-                        subscription_error = discord.Embed(color = 0xe67e22, title = 'SUBSCRIPTION ERROR: ALREADY SUBSCRIBED', description= f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.')
-                        subscription_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                        await ctx.send(embed = subscription_error)
+                        await ctx.send(embed=discord.Embed(
+                            color=discord.Color.yellow(),
+                            description=f'#{ctx.channel} is already subscribed to commits for {repo} on {branch}.'))
             else:
                 if channel not in commit_subscribers[repo][branch]:
                     commit_subscribers[repo][branch].append(channel)
-                    await ctx.send(f'{ctx.channel} is now subscribed to commits for {repo} on {branch}!')
+                    await ctx.send(embed=discord.Embed(
+                        color=discord.Color.green(),
+                        title='Success',
+                        description=f'#{ctx.channel} is now subscribed to commits for {repo} on {branch}!'
+                    ))
                 else:
-                    subscription_error = discord.Embed(color = 0xe67e22, title = 'SUBSCRIPTION ERROR: ALREADY SUBSCRIBED', description= f'{ctx.channel} is already subscribed to commits for {repo} on {branch}.')
-                    subscription_error.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
-                    await ctx.send(embed = subscription_error)
+                    await ctx.send(embed=discord.Embed(
+                        color=discord.Color.yellow(),
+                        description=f'#{ctx.channel} is already subscribed to commits for {repo} on {branch}.'))
 
-    @commands.command(name='open-pull-requests', description='Show open pull requests in testing repo.')
-    async def open_pull_requests(ctx : discord.ApplicationContext, repo=''):
+    @commands.command(name='gh-open-pull-requests', description='Show open pull requests in testing repo.')
+    async def open_pull_requests(ctx: discord.ApplicationContext, repo=''):
         """
         Get a list of a repository's open pull requests.
 
@@ -386,18 +435,25 @@ class DiscordCollabyBot(Bot):
         :return: None
         """
 
-        openpr_embed = discord.Embed(color=0x7289da, title=f'Open pull requests in {repo}:\n')
-        # get repo via pygithub
-        g = Github()
-        repo = g.get_repo(repo)
-        #get open(active) PR
-        pulls = repo.get_pulls(state = 'open')
-        for pr in pulls:
-            openpr_embed.add_field(name=f'{pr.title}:', value=f'{pr.url}', inline=False)
-        await ctx.send(embed = openpr_embed)
+        if repo == '':
+            await ctx.send(embed=discord.Embed(
+                title='Usage',
+                color=discord.Color.yellow(),
+                description='/gh-open-pull-requests <REPO_OWNER>/<REPO_NAME>')
+            )
+        else:
+            openpr_embed = discord.Embed(color=discord.Color.blurple(), title=f'Open pull requests in {repo}:\n')
+            # get repo via pygithub
+            g = Github()
+            repo = g.get_repo(repo)
+            # get open(active) PR
+            pulls = repo.get_pulls(state='open')
+            for pr in pulls:
+                openpr_embed.add_field(name=f'{pr.title}:', value=f'{pr.url}', inline=False)
+            await ctx.send(embed=openpr_embed)
 
     @commands.command(name='jira-setup-token', description='Set up Jira Token to monitor Jira Issues.')
-    async def jira_setup_token(ctx : discord.ApplicationContext):
+    async def jira_setup_token(ctx: discord.ApplicationContext):
         """
         Setup a Jira token to monitor issues in a Jira workspace.
 
@@ -416,7 +472,7 @@ class DiscordCollabyBot(Bot):
         if len(parts) != 4:
             await ctx.send('Use /jira-setup-token <email> <jira_url> <jira_token>')
             return
-        
+
         userEmail = parts[1]
         jiraUrl = parts[2]
         jiraToken = parts[3]
@@ -434,8 +490,9 @@ class DiscordCollabyBot(Bot):
             jira_subscribers[userId] = jiraInfo
             await ctx.send('Token registered.')
 
-    @commands.command(name='jira', description='Retrieves summary, description, issuetype, assignee, and parent of Jira issue.')
-    async def jira_get_issue(ctx : discord.ApplicationContext):
+    @commands.command(name='jira-issue',
+                      description='Get summary, description, issue type, and assignee of a Jira issue.')
+    async def jira_get_issue(ctx: discord.ApplicationContext):
         """
         Respond with information about a Jira issue.
 
@@ -450,20 +507,28 @@ class DiscordCollabyBot(Bot):
         msg = ctx.message.content
         parts = msg.split()
         if len(parts) != 2:
-            await ctx.send("To get a summary of an issue, pass an issue ID as an argument like this: '/jira EX-123'")
-            return 
-        
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Usage',
+                description='/jira-issue <ISSUE_ID>')
+            )
+            return
+
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            await ctx.send("You haven't set up a token yet. Use the /jira-setup-token command to add one.")
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.message.author.id} is not authenticated with Jira.')
+            )
             return
 
         jiraInfo = jira_subscribers[userId]
-        jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"],jiraInfo["token"]))
+        jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
         issue_name = parts[1]
         issue = jira.issue(issue_name)
 
-        embed = discord.Embed(color=0x2ecc71, title=issue_name)
+        embed = discord.Embed(color=discord.Color.blurple(), title=issue_name)
         embed.add_field(name=f'Summary:', value=issue.fields.summary, inline=False)
         embed.add_field(name=f'Description:', value=issue.fields.description, inline=False)
         if issue.fields.assignee is None:
@@ -473,8 +538,8 @@ class DiscordCollabyBot(Bot):
         embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
         await ctx.send(embed=embed)
 
-    @commands.command(name='sprint', description='Returns sprint summary')
-    async def jira_get_sprint(ctx : discord.ApplicationContext):
+    @commands.command(name='jira-sprint', description='Get summary of a project\'s active sprint.')
+    async def jira_get_sprint(ctx: discord.ApplicationContext):
         """
         Get information about the current sprint in a Jira project.
 
@@ -490,14 +555,16 @@ class DiscordCollabyBot(Bot):
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            embed = discord.Embed(color=discord.Color.red(), title="Command Error")
-            embed.add_field(name='Status', value='Failed. Jira was not authenticated.', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.message.author.id} is not authenticated with Jira.')
+            )
             return
 
         jiraInfo = jira_subscribers[userId]
         jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
-        
+
         parts = msg.split()
 
         # No args
@@ -508,7 +575,7 @@ class DiscordCollabyBot(Bot):
                 embed.add_field(name=project.name, value=project.id, inline=False)
             await ctx.send(embed=embed)
             return
-        
+
         if len(parts) > 2:
             embed = discord.Embed(color=discord.Color.red(), title="Too many args.")
             await ctx.send(embed=embed)
@@ -519,6 +586,7 @@ class DiscordCollabyBot(Bot):
         query = 'project={0} AND SPRINT not in closedSprints() AND sprint not in futureSprints()'.format(projectId)
         issues = jira.search_issues(query)
 
+        # TODO: Move to utils
         def divide_chunks(l, n):
             for i in range(0, len(l), n):
                 yield l[i:i + n]
@@ -527,7 +595,7 @@ class DiscordCollabyBot(Bot):
         embeds = []
         pages = []
         for i in range(0, len(issue_chunks)):
-            embeds.append(discord.Embed(color=discord.Color.green(), title='Jira issues:'))
+            embeds.append(discord.Embed(color=discord.Color.blurple(), title='Active Sprint'))
             for issue_name in issue_chunks[i]:
                 issue = jira.issue(issue_name)
                 embeds[i].add_field(name=f'Name:', value=issue_name, inline=False)
@@ -547,16 +615,14 @@ class DiscordCollabyBot(Bot):
         await paginator.send(ctx)
 
         # Create burndown chart
-        from burndown import burndown
         burndown_chart = burndown(jira, issues)
         with open(burndown_chart, 'rb') as f:
             picture = discord.File(f)
-            await ctx.send(file=picture)
-        from os import remove
-        remove(burndown_chart) # Delete chart after sending it
+            await ctx.send('**Burndown Chart:**', file=picture)
+        remove(burndown_chart)  # Delete chart after sending it
 
-    @commands.command(name='jira-assign', description='Assign a person to Jira Issue')
-    async def jira_assign_issue(ctx : discord.ApplicationContext):
+    @commands.command(name='jira-assign', description='Assign a Jira issue to a user.')
+    async def jira_assign_issue(ctx: discord.ApplicationContext):
         """
         Assign a Jira ticket to a user.
 
@@ -570,9 +636,11 @@ class DiscordCollabyBot(Bot):
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            embed = discord.Embed(color=discord.Color.red(), title="/jira-assign <ISSUE> <USER>")
-            embed.add_field(name='Status', value='Failed. Jira was not authenticated', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.message.author.id} is not authenticated with Jira.')
+            )
             return
 
         jiraInfo = jira_subscribers[userId]
@@ -580,61 +648,67 @@ class DiscordCollabyBot(Bot):
 
         parts = msg.split()
 
-        if len(parts) == 1:
-            embed = discord.Embed(color=discord.Color.red(), title="Provide ticket name.")
-            projects = jira.projects()
-            for project in projects:
-                embed.add_field(name=project.name, value=project.id, inline=False)
-            await ctx.send(embed=embed)
+        # TODO: Move to utils
+        def divide_chunks(l, n):
+            for i in range(0, len(l), n):
+                yield l[i:i + n]
 
+        if len(parts) == 1:
+            # projects = jira.projects()
+            # for project in projects:
+            # embed.add_field(name=project.name, value=project.id, inline=False)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Usage',
+                description='/jira-assign <TICKET_ID> <USER_ID>')
+            )
+
+        # TODO: Move to get-issues command
+        # User but no ticket
         elif len(parts) == 2 and parts[1].isdigit():
             project_name = parts[1]
             issues = []
             i = 0
-            chunk_size = 100
+            chunk_size = 500
             while True:
                 chunk = jira.search_issues(f'project = {project_name}', startAt=i, maxResults=chunk_size)
                 i += chunk_size
                 issues += chunk.iterable
                 if i >= chunk.total:
                     break
-            
-            embed = discord.Embed(color=discord.Color.red(), title="Active tickets: ")
+
+            embed = discord.Embed(color=discord.Color.yellow(), title="Available tickets: ")
             for issue in issues:
                 if issue.fields.status.name != 'Done':
                     embed.add_field(name=issue, value=issue.fields.status, inline=False)
 
             await ctx.send(embed=embed)
 
+        # Ticket but not user
         elif len(parts) == 2 and parts[1].isdigit() == False:
             ticket = parts[1]
             project_name = ticket.split('-')[0]
-            
-            startIndex = 0
-            chunkSize = 25
-            length = 0
-            part = 1
-            embed_title = 'Available assignees (Part {0})'.format(part)
-            embed = discord.Embed(color=discord.Color.red(), title=embed_title)
 
-            while True:
-                chunk = jira.search_assignable_users_for_projects('', project_name, startAt=startIndex, maxResults=chunkSize)
-                retrieved = len(chunk)
-                length += retrieved
-                startIndex += chunkSize
-                embed_title = 'Available assignees (Part {0})'.format(part)
-                part += 1
-                embed = discord.Embed(color=discord.Color.red(), title=embed_title)
-                for user in chunk:
-                    embed.add_field(name=user.displayName, value=user.accountId, inline=False)
-                    
-                await ctx.send(embed=embed)
-                if length < startIndex:
-                    break
+            users = jira.search_assignable_users_for_projects('', project_name, maxResults=500)
+            user_chunks = list(divide_chunks(users, 12))
+
+            embeds = []
+            pages = []
+            for i in range(0, len(user_chunks)):
+                embeds.append(discord.Embed(color=discord.Color.yellow(), title='Assignable Users'))
+                for user in user_chunks[i]:
+                    embeds[i].add_field(name=user.displayName, value=user.accountId, inline=False)
+                pages.append(Page(
+                    content=f'Available assignees (Part {i + 1}):',
+                    embeds=[embeds[i]])
+                )
+            paginator = Paginator(pages=pages)
+            await paginator.send(ctx)
 
         elif len(parts) == 3:
             project_name = parts[1].split('-')[0]
             users_dict = {}
+            # TODO: Deal with max results
             users = jira.search_assignable_users_for_projects('', project_name, maxResults=200)
 
             for user in users:
@@ -654,21 +728,36 @@ class DiscordCollabyBot(Bot):
                 if response.content in ['yes', 'Yes', 'y', 'Y']:
                     try:
                         jira.assign_issue(issue_name, user_name)
-                        await ctx.send(f'Successfully reassigned {issue_name} to {user_name}.')
+                        await ctx.send(embed=discord.Embed(
+                            color=discord.Color.green(),
+                            title='Success',
+                            description=f'Successfully reassigned {issue_name} to {user_name}.')
+                        )
                     except JIRAError:
-                        await ctx.send(f'No user named {user_name} was found.')
+                        await ctx.send(embed=discord.Embed(
+                            title='User Error',
+                            color=discord.Color.red(),
+                            description=f'User {user_name} not found.')
+                        )
                 else:
                     await ctx.send(f'{issue_name} will not be reassigned to {user_name}.')
             else:
                 try:
                     jira.assign_issue(issue_name, user_name)
-                    await ctx.send(f'Successfully assigned {issue_name} to {user_name}.')
+                    await ctx.send(embed=discord.Embed(
+                        color=discord.Color.green(),
+                        title='Success',
+                        description=f'Successfully reassigned {issue_name} to {user_name}.')
+                    )
                 except JIRAError:
-                    await ctx.send(f'No user named {user_name} was found.')
+                    await ctx.send(embed=discord.Embed(
+                        title='User Error',
+                        color=discord.Color.red(),
+                        description=f'User {user_name} not found.')
+                    )
 
-        
-    @commands.command(name='jira-unassign', description='Unassigns a person from Jira Issue')
-    async def jira_unassign_issue(ctx : discord.ApplicationContext):
+    @commands.command(name='jira-unassign', description='Unassign a Jira issue.')
+    async def jira_unassign_issue(ctx: discord.ApplicationContext):
         """
         Unassign a user from a Jira issue that has already been assigned to someone.
 
@@ -680,27 +769,32 @@ class DiscordCollabyBot(Bot):
         parts = msg.split()
 
         if len(parts) != 2:
-            embed = discord.Embed(color=discord.Color.red(), title="/jira-unassign <ISSUE>")
-            embed.add_field(name='Status', value='Failed. Wrong input', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Usage',
+                description='/jira-unassign <ISSUE_ID>')
+            )
             return
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            embed = discord.Embed(color=discord.Color.red(), title="/jira-unassign <ISSUE>")
-            embed.add_field(name='Status', value='Failed. Jira was not authenticated', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.message.author.id} is not authenticated with Jira.')
+            )
             return
 
         jiraInfo = jira_subscribers[userId]
-        jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"],jiraInfo["token"]))
+        jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
-        
-        embed = discord.Embed(color=discord.Color.green(), title="/jira-unassign <ISSUE>")
         issue_name = parts[1]
         jira.assign_issue(issue_name, None)
-        embed.add_field(name='Status', value='Success', inline=False)
-        await ctx.send(embed=embed)
+        await ctx.send(embed=discord.Embed(
+            color=discord.Color.green(),
+            title='Success',
+            description=f'{issue_name} has been unassigned.')
+        )
 
     @classmethod
     def add_all_commands(cls, bot):
