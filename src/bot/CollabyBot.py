@@ -4,7 +4,7 @@ from discord.ext.commands import Bot
 from discord.ext.commands.errors import CommandInvokeError
 from github import Github
 from jira import JIRA, JIRAError
-import discord
+from discord.ext.pages import Page, Paginator
 
 from cogs.github_cog import *
 from cogs.jira_cog import *
@@ -126,12 +126,37 @@ class DiscordCollabyBot(Bot):
 
         :return: None
         """
-        embed = discord.Embed(color=discord.Color.blurple(), title=f'Here\'s a list of commands you can use:\n')
-        for command in ctx.bot.commands:
-            embed.add_field(name=f'/{command.name}:', value=f'{command.description}', inline=False)
-        await ctx.send(embed=embed)
+        general_embed = discord.Embed(color=discord.Color.blurple(), title=f'General Commands',
+                                      description='Commands related to the general functionality of the bot.')
+        github_embed = discord.Embed(color=discord.Color.blurple(), title=f'GitHub Commands',
+                                     description='Commands related to GitHub.')
+        jira_embed = discord.Embed(color=discord.Color.blurple(), title=f'Jira Commands',
+                                   description='Commands related to Jira.')
+        pages = []
+        general_embed.add_field(name='/ping:', value='Responds with pong.', inline=False)
+        general_embed.add_field(name='/commands:', value='List all supported commands.', inline=False)
+        for command in ctx.bot.get_cog('GitHubCog').get_commands():
+            github_embed.add_field(name=f'/{command.name}:', value=f'{command.description}', inline=False)
+        for command in ctx.bot.get_cog('JiraCog').get_commands():
+            jira_embed.add_field(name=f'/{command.name}:', value=f'{command.description}', inline=False)
 
-    @commands.command(name='ping', description='Respond with pong')
+        pages.append(Page(
+            content='Here\'s a list of commands you can use.',
+            embeds=[general_embed]
+        ))
+        pages.append(Page(
+            content='Here\'s a list of commands you can use.',
+            embeds=[github_embed]
+        ))
+        pages.append(Page(
+            content='Here\'s a list of commands you can use.',
+            embeds=[jira_embed]
+        ))
+
+        paginator = Paginator(pages=pages)
+        await paginator.send(ctx)
+
+    @commands.command(name='ping', description='Responds with pong.')
     async def ping(ctx: discord.ApplicationContext):
         """
         Send 'pong' in response to 'ping'.
