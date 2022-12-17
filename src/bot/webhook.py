@@ -75,7 +75,7 @@ async def payload_handler_commits(
                     str(payload_json.get('commits')[0].get('timestamp')),
                     str(payload_json.get('commits')[0].get('url')),
                     str(payload_json.get('commits')[0].get('author').get('name')))
-    await discordBot.send_payload_message(commit.object_string(), event='push', repo=repo, branch=branch)
+    await discordBot.get_cog('GitHubCog').send_payload_message(commit.object_string(), event='push', repo=repo, branch=branch)
 
 
 @app.post("/webhook/issues", status_code=http.HTTPStatus.ACCEPTED)
@@ -109,7 +109,7 @@ async def payload_handler_issues(
                   str(payload_json.get('issue').get('repository_url')),
                   str(payload_json.get('issue').get('created_at')), str(payload_json.get('issue').get('html_url')),
                   str(payload_json.get('issue').get('user').get('login')))
-    await discordBot.send_payload_message(issue.object_string(), event='issue', repo=repo, branch=branch)
+    await discordBot.get_cog('GitHubCog').send_payload_message(issue.object_string(), event='issue', repo=repo, branch=branch)
 
 
 @app.post("/webhook/pull-request", status_code=http.HTTPStatus.ACCEPTED)
@@ -163,7 +163,7 @@ async def payload_handler_pr(
                      payload_json["repository"]["full_name"], timestamp,
                      payload_json["pull_request"]["html_url"],
                      payload_json["pull_request"]["user"]["login"], reviewer_requested, reviewer, review_body, pr_state)
-    await discordBot.send_payload_message(PR.object_string(), event='pull_request', repo=repo, branch=branch)
+    await discordBot.get_cog('GitHubCog').send_payload_message(PR.object_string(), event='pull_request', repo=repo, branch=branch)
 
 
 @app.on_event("startup")

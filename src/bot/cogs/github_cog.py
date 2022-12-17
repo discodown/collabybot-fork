@@ -29,20 +29,20 @@ class GitHubCog(commands.Cog):
                                   color=discord.Color.teal())
             embed.add_field(name='Pull Request', value=payload, inline=False)
             for channel in pr_subscribers[repo]:
-                await self.get_channel(int(channel)).send(embed=embed)
+                await self.bot.get_channel(int(channel)).send(embed=embed)
         elif event == 'issue':
             embed = discord.Embed(title='GitHub Event Notification',
                                   color=discord.Color.magenta())
             embed.add_field(name='Issue', value=payload, inline=False)
             for channel in issue_subscribers[repo]:
-                await self.get_channel(int(channel)).send(embed=embed)
+                await self.bot.get_channel(int(channel)).send(embed=embed)
         elif event == 'push':
             try:
                 embed = discord.Embed(title='GitHub Event Notification',
                                       color=discord.Color.purple())
                 embed.add_field(name='Commit', value=payload, inline=False)
                 for channel in commit_subscribers.get(repo).get(branch):
-                    await self.get_channel(int(channel)).send(embed=embed)
+                    await self.bot.get_channel(int(channel)).send(embed=embed)
             except TypeError:
                 print('No subscribers')
 
