@@ -107,7 +107,7 @@ async def payload_handler_issues(
         branch = 'main'
 
     issue = Issue(str(payload_json.get('issue').get('body')), str(payload_json.get('action')),
-                  str(payload_json.get('issue').get('repository_url')),
+                  str(payload_json.get('repository').get('full_name')),
                   str(payload_json.get('issue').get('created_at')), str(payload_json.get('issue').get('html_url')),
                   str(payload_json.get('issue').get('user').get('login')))
     await discordBot.get_cog('GitHubCog').send_payload_message(issue.object_string(), event='issue', repo=repo, branch=branch)
