@@ -10,6 +10,7 @@ import http
 import uvicorn
 import nest_asyncio
 
+
 nest_asyncio.apply()  # needed to prevent errors caused by nested async tasks
 load_dotenv()  # load env file
 intents = discord.Intents().all()  # default to all intents for bot
@@ -177,6 +178,11 @@ async def startup_event():
     :return: None
     """
     asyncio.create_task(discordBot.start(discordToken))
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    cog = discordBot.get_cog('GitHubCog')
+    cog.save_dicts()
 
 
 # Run the server

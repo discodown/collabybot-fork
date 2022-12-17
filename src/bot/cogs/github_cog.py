@@ -2,17 +2,42 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 from github.MainClass import Github
+import json
+from os import curdir
 
-repos = {}  # repo names and list of branches
-pr_subscribers = {}  # channel ids of channels subscribed to pull requests
-commit_subscribers = {}  # channel ids of channels subscribed to commits, one list per branch
-issue_subscribers = {}  # channel ids of channels subscribed to issues
 
+with open('src/bot/cogs/json_/repos.json') as f:
+    repos = json.load(f)  # repo names and list of branches
+    f.close()
+with open('src/bot/cogs/json_/pr_subscribers.json') as f:
+    pr_subscribers = json.load(f)  # channel ids of channels subscribed to pull requests
+    f.close()
+with open('src/bot/cogs/json_/commit_subscribers.json') as f:
+    commit_subscribers = json.load(f)  # channel ids of channels subscribed to commits, one list per branch
+    f.close()
+with open('src/bot/cogs/json_/issue_subscribers.json') as f:
+    issue_subscribers = json.load(f)  # channel ids of channels subscribed to issues
+    f.close()
 
 class GitHubCog(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+
+    def save_dicts(self):
+        with open('src/bot/cogs/json_/repos.json', 'w') as f:
+            print(repos)
+            json.dump(repos, f)  # repo names and list of branches
+            f.close()
+        with open('src/bot/cogs/json_/pr_subscribers.json', 'w') as f:
+            json.dump(pr_subscribers, f)  # channel ids of channels subscribed to pull requests
+            f.close()
+        with open('src/bot/cogs/json_/commit_subscribers.json', 'w') as f:
+            json.dump(commit_subscribers, f)  # channel ids of channels subscribed to commits, one list per branch
+            f.close()
+        with open('src/bot/cogs/json_/issue_subscribers.json', 'w') as f:
+            json.dump(issue_subscribers, f)  # channel ids of channels subscribed to issues
+            f.close()
 
     async def send_payload_message(self, payload, event, repo, branch='main'):
         """
@@ -58,8 +83,8 @@ class GitHubCog(commands.Cog):
         :return: None
         """
 
-        channel = ctx.channel.id
-        server = ctx.guild_id
+        channel = str(ctx.channel.id)
+        server = str(ctx.guild_id)
         if repo == '':
             await ctx.respond(embed=discord.Embed(
                 title='Usage',
@@ -114,8 +139,8 @@ class GitHubCog(commands.Cog):
         :return: None
         """
 
-        channel = ctx.channel.id
-        server = ctx.guild_id
+        channel = str(ctx.channel.id)
+        server = str(ctx.guild_id)
 
         if repo == '':
             await ctx.respond(embed=discord.Embed(
@@ -170,7 +195,7 @@ class GitHubCog(commands.Cog):
         :return: None
         """
 
-        server = ctx.guild_id
+        server = str(ctx.guild_id)
 
         if repo == '':
             await ctx.respond(embed=discord.Embed(
@@ -211,7 +236,7 @@ class GitHubCog(commands.Cog):
         :return: None
         """
 
-        server = ctx.guild_id
+        server = str(ctx.guild_id)
 
         if not repos.get(server):
             await ctx.respond(embed=discord.Embed(
@@ -242,8 +267,8 @@ class GitHubCog(commands.Cog):
         :return: None
         """
 
-        channel = ctx.channel.id
-        server = ctx.guild_id
+        channel = str(ctx.channel.id)
+        server = str(ctx.guild_id)
 
         if repo == '':
             await ctx.respond(embed=discord.Embed(
