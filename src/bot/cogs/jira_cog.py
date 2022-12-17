@@ -94,7 +94,7 @@ class JiraCog(commands.Cog):
         return filename
 
     @commands.slash_command(name='jira-setup-token', description='Set up Jira Token to monitor Jira Issues.')
-    async def jira_setup_token(self, ctx: discord.ApplicationContext):
+    async def jira_setup_token(self, ctx: discord.ApplicationContext, email='', url='', token=''):
         """
         Setup a Jira token to monitor issues in a Jira workspace.
 
@@ -108,28 +108,19 @@ class JiraCog(commands.Cog):
         """
 
         userId = ctx.user.id
-        msg = ctx.message.content
-        parts = msg.split(' ')
-        if len(parts) != 4:
-            await ctx.send('Use /jira-setup-token <email> <jira_url> <jira_token>')
-            return
-
-        userEmail = parts[1]
-        jiraUrl = parts[2]
-        jiraToken = parts[3]
 
         # TODO: Make authenticated list based on Discord server not single users
         jiraInfo = {}
-        jiraInfo["url"] = jiraUrl
-        jiraInfo["email"] = userEmail
-        jiraInfo["token"] = jiraToken
+        jiraInfo["url"] = url
+        jiraInfo["email"] = email
+        jiraInfo["token"] = token
 
         if userId in jira_subscribers:
             jira_subscribers[userId] = jiraInfo
-            await ctx.send('Token updated.')
+            await ctx.respond('Token updated.')
         else:
             jira_subscribers[userId] = jiraInfo
-            await ctx.send('Token registered.')
+            await ctx.respond('Token registered.')
 
     @commands.slash_command(name='jira-issue',
                       description='Get summary, description, issue type, and assignee of a Jira issue.')
@@ -146,7 +137,7 @@ class JiraCog(commands.Cog):
 
         userId = ctx.user.id
         if issue_id == '':
-            await ctx.send(embed=discord.Embed(
+            await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 title='Usage',
                 description='/jira-issue <ISSUE_ID>')
@@ -154,7 +145,7 @@ class JiraCog(commands.Cog):
         else:
             tokenExists = (userId in jira_subscribers)
             if tokenExists == False:
-                await ctx.send(embed=discord.Embed(
+                await ctx.respond(embed=discord.Embed(
                     color=discord.Color.red(),
                     title='Authentication Error',
                     description=f'User {ctx.user.name} is not authenticated with Jira.')
@@ -172,7 +163,7 @@ class JiraCog(commands.Cog):
                 else:
                     embed.add_field(name=f'Assignee:', value=issue.fields.assignee.displayName, inline=False)
                 embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
-                await ctx.send(embed=embed)
+                await ctx.respond(embed=embed)
 
     @commands.slash_command(name='jira-sprint', description='Get summary of a project\'s active sprint.')
     async def jira_get_sprint(self, ctx: discord.ApplicationContext, project_id=''):
@@ -191,7 +182,7 @@ class JiraCog(commands.Cog):
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            await ctx.send(embed=discord.Embed(
+            await ctx.respond(embed=discord.Embed(
                 color=discord.Color.red(),
                 title='Authentication Error',
                 description=f'User {ctx.user.name} is not authenticated with Jira.')
@@ -203,7 +194,7 @@ class JiraCog(commands.Cog):
 
         # No args
         if project_id == '':
-            await ctx.send(embed=discord.Embed(
+            await ctx.respond(embed=discord.Embed(
                 title='Usage',
                 color=discord.Color.yellow(),
                 description='/sprint <PROJECT_ID>')
@@ -212,7 +203,7 @@ class JiraCog(commands.Cog):
             projects = jira.projects()
             for project in projects:
                 embed.add_field(name=project.name, value=f'Project ID: {project.id}', inline=False)
-            await ctx.send(embed=embed)
+            await ctx.respond(embed=embed)
         else:
             # Find issues from the project's current sprint using JQL query
             query = 'project={0} AND SPRINT not in closedSprints() AND sprint not in futureSprints()'.format(project_id)
@@ -250,7 +241,7 @@ class JiraCog(commands.Cog):
             burndown_chart = self.burndown(jira, issues)
             with open(burndown_chart, 'rb') as f:
                 picture = discord.File(f)
-                await ctx.send('**Burndown Chart:**', file=picture)
+                await ctx.respond('**Burndown Chart:**', file=picture)
             remove(burndown_chart)  # Delete chart after sending it
 
     @commands.slash_command(name='jira-assign', description='Assign a Jira issue to a user.')
@@ -267,7 +258,7 @@ class JiraCog(commands.Cog):
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
-            await ctx.send(embed=discord.Embed(
+            await ctx.respond(embed=discord.Embed(
                 color=discord.Color.red(),
                 title='Authentication Error',
                 description=f'User {ctx.user.name} is not authenticated with Jira.')
@@ -286,7 +277,7 @@ class JiraCog(commands.Cog):
             # projects = jira.projects()
             # for project in projects:
             # embed.add_field(name=project.name, value=project.id, inline=False)
-            await ctx.send(embed=discord.Embed(
+            await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 title='Usage',
                 description='/jira-assign <TICKET_ID> <USER_ID>')
@@ -311,7 +302,7 @@ class JiraCog(commands.Cog):
         #         if issue.fields.status.name != 'Done':
         #             embed.add_field(name=issue, value=issue.fields.status, inline=False)
         #
-        #     await ctx.send(embed=embed)
+        #     await ctx.respond(embed=embed)
 
         # Ticket but not user
         elif user_id == '':
@@ -349,18 +340,18 @@ class JiraCog(commands.Cog):
 
             issue = jira.issue(issue_id)
             if issue.fields.assignee is not None:
-                await ctx.send(f'{issue_id} is already assigned to {issue.fields.assignee}. Reassign to {user_name}?')
+                await ctx.respond(f'{issue_id} is already assigned to {issue.fields.assignee}. Reassign to {user_name}?')
                 response = await ctx.bot.wait_for('message', timeout=20.0)
                 if response.content in ['yes', 'Yes', 'y', 'Y']:
                     try:
                         jira.assign_issue(issue_id, user_name)
-                        await ctx.send(embed=discord.Embed(
+                        await ctx.respond(embed=discord.Embed(
                             color=discord.Color.green(),
                             title='Success',
                             description=f'Successfully reassigned {issue_id} to {user_name}.')
                         )
                     except JIRAError:
-                        await ctx.send(embed=discord.Embed(
+                        await ctx.respond(embed=discord.Embed(
                             title='User Error',
                             color=discord.Color.red(),
                             description=f'User {user_name} not found.')
@@ -370,13 +361,13 @@ class JiraCog(commands.Cog):
             else:
                 try:
                     jira.assign_issue(issue_id, user_name)
-                    await ctx.send(embed=discord.Embed(
+                    await ctx.respond(embed=discord.Embed(
                         color=discord.Color.green(),
                         title='Success',
                         description=f'Successfully reassigned {issue_id} to {user_name}.')
                     )
                 except JIRAError:
-                    await ctx.send(embed=discord.Embed(
+                    await ctx.respond(embed=discord.Embed(
                         title='User Error',
                         color=discord.Color.red(),
                         description=f'User {user_name} not found.')
@@ -393,7 +384,7 @@ class JiraCog(commands.Cog):
         userId = ctx.user.id
 
         if issue_id == '':
-            await ctx.send(embed=discord.Embed(
+            await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 title='Usage',
                 description='/jira-unassign <ISSUE_ID>')
@@ -402,7 +393,7 @@ class JiraCog(commands.Cog):
         else:
             tokenExists = (userId in jira_subscribers)
             if tokenExists == False:
-                await ctx.send(embed=discord.Embed(
+                await ctx.respond(embed=discord.Embed(
                     color=discord.Color.red(),
                     title='Authentication Error',
                     description=f'User {ctx.user.name} is not authenticated with Jira.')
@@ -413,7 +404,7 @@ class JiraCog(commands.Cog):
             jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
             jira.assign_issue(issue_id, None)
-            await ctx.send(embed=discord.Embed(
+            await ctx.respond(embed=discord.Embed(
                 color=discord.Color.green(),
                 title='Success',
                 description=f'{issue_id} has been unassigned.')
