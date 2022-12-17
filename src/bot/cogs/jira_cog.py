@@ -93,7 +93,7 @@ class JiraCog(commands.Cog):
         # Return the filename
         return filename
 
-    @commands.command(name='jira-setup-token', description='Set up Jira Token to monitor Jira Issues.')
+    @commands.slash_command(name='jira-setup-token', description='Set up Jira Token to monitor Jira Issues.')
     async def jira_setup_token(self, ctx: discord.ApplicationContext):
         """
         Setup a Jira token to monitor issues in a Jira workspace.
@@ -107,7 +107,7 @@ class JiraCog(commands.Cog):
         :return: None
         """
 
-        userId = ctx.message.author.id
+        userId = ctx.user.id
         msg = ctx.message.content
         parts = msg.split(' ')
         if len(parts) != 4:
@@ -131,7 +131,7 @@ class JiraCog(commands.Cog):
             jira_subscribers[userId] = jiraInfo
             await ctx.send('Token registered.')
 
-    @commands.command(name='jira-issue',
+    @commands.slash_command(name='jira-issue',
                       description='Get summary, description, issue type, and assignee of a Jira issue.')
     async def jira_get_issue(self, ctx: discord.ApplicationContext, issue_id=''):
         """
@@ -144,7 +144,7 @@ class JiraCog(commands.Cog):
         :return: None
         """
 
-        userId = ctx.message.author.id
+        userId = ctx.user.id
         if issue_id == '':
             await ctx.send(embed=discord.Embed(
                 color=discord.Color.yellow(),
@@ -157,7 +157,7 @@ class JiraCog(commands.Cog):
                 await ctx.send(embed=discord.Embed(
                     color=discord.Color.red(),
                     title='Authentication Error',
-                    description=f'User {ctx.message.author.name} is not authenticated with Jira.')
+                    description=f'User {ctx.user.name} is not authenticated with Jira.')
                 )
             else:
                 jiraInfo = jira_subscribers[userId]
@@ -174,7 +174,7 @@ class JiraCog(commands.Cog):
                 embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
                 await ctx.send(embed=embed)
 
-    @commands.command(name='jira-sprint', description='Get summary of a project\'s active sprint.')
+    @commands.slash_command(name='jira-sprint', description='Get summary of a project\'s active sprint.')
     async def jira_get_sprint(self, ctx: discord.ApplicationContext, project_id=''):
         """
         Get information about the current sprint in a Jira project.
@@ -186,7 +186,7 @@ class JiraCog(commands.Cog):
         :return: None
         """
 
-        userId = ctx.message.author.id
+        userId = ctx.user.id
         msg = ctx.message.content
 
         tokenExists = (userId in jira_subscribers)
@@ -194,7 +194,7 @@ class JiraCog(commands.Cog):
             await ctx.send(embed=discord.Embed(
                 color=discord.Color.red(),
                 title='Authentication Error',
-                description=f'User {ctx.message.author.name} is not authenticated with Jira.')
+                description=f'User {ctx.user.name} is not authenticated with Jira.')
             )
             return
 
@@ -244,7 +244,7 @@ class JiraCog(commands.Cog):
                     embeds=[embeds[i]]
                 ))
             paginator = Paginator(pages=pages)
-            await paginator.send(ctx)
+            await paginator.respond(ctx.interaction, ephemeral=True)
 
             # Create burndown chart
             burndown_chart = self.burndown(jira, issues)
@@ -253,7 +253,7 @@ class JiraCog(commands.Cog):
                 await ctx.send('**Burndown Chart:**', file=picture)
             remove(burndown_chart)  # Delete chart after sending it
 
-    @commands.command(name='jira-assign', description='Assign a Jira issue to a user.')
+    @commands.slash_command(name='jira-assign', description='Assign a Jira issue to a user.')
     async def jira_assign_issue(self, ctx: discord.ApplicationContext, issue_id='', user_id=''):
         """
         Assign a Jira ticket to a user.
@@ -263,14 +263,14 @@ class JiraCog(commands.Cog):
         :return: None
         """
 
-        userId = ctx.message.author.id
+        userId = ctx.user.id
 
         tokenExists = (userId in jira_subscribers)
         if tokenExists == False:
             await ctx.send(embed=discord.Embed(
                 color=discord.Color.red(),
                 title='Authentication Error',
-                description=f'User {ctx.message.author.name} is not authenticated with Jira.')
+                description=f'User {ctx.user.name} is not authenticated with Jira.')
             )
             return
 
@@ -331,7 +331,7 @@ class JiraCog(commands.Cog):
                     embeds=[embeds[i]])
                 )
             paginator = Paginator(pages=pages)
-            await paginator.send(ctx)
+            await paginator.respond(ctx.interaction, ephemeral=True)
 
         else:
             project_name = issue_id.split('-')[0]
@@ -382,7 +382,7 @@ class JiraCog(commands.Cog):
                         description=f'User {user_name} not found.')
                     )
 
-    @commands.command(name='jira-unassign', description='Unassign a Jira issue.')
+    @commands.slash_command(name='jira-unassign', description='Unassign a Jira issue.')
     async def jira_unassign_issue(self, ctx: discord.ApplicationContext, issue_id=''):
         """
         Unassign a user from a Jira issue that has already been assigned to someone.
@@ -390,7 +390,7 @@ class JiraCog(commands.Cog):
         Requires an issue ID and username to work.
         :return:
         """
-        userId = ctx.message.author.id
+        userId = ctx.user.id
 
         if issue_id == '':
             await ctx.send(embed=discord.Embed(
@@ -405,7 +405,7 @@ class JiraCog(commands.Cog):
                 await ctx.send(embed=discord.Embed(
                     color=discord.Color.red(),
                     title='Authentication Error',
-                    description=f'User {ctx.message.author.name} is not authenticated with Jira.')
+                    description=f'User {ctx.user.name} is not authenticated with Jira.')
                 )
                 return
 
@@ -419,3 +419,5 @@ class JiraCog(commands.Cog):
                 description=f'{issue_id} has been unassigned.')
             )
 
+def setup(bot):
+    bot.add_cog(JiraCog(bot))

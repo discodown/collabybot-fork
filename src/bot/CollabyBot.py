@@ -9,7 +9,6 @@ from discord.ext.pages import Page, Paginator
 from cogs.github_cog import *
 from cogs.jira_cog import *
 
-cogs_list = []
 
 class DiscordCollabyBot(Bot):
     """
@@ -117,7 +116,7 @@ class DiscordCollabyBot(Bot):
         """
         pass
 
-    @commands.command(name='commands', description='List all supported commands.')
+    @commands.slash_command(name='commands', description='List all supported commands.')
     async def get_commands(ctx: discord.ApplicationContext):
         """
         Send a message listing all of CollabyBot's Discord slash commands.
@@ -154,9 +153,9 @@ class DiscordCollabyBot(Bot):
         ))
 
         paginator = Paginator(pages=pages)
-        await paginator.send(ctx)
+        await paginator.respond(ctx.interaction, ephemeral=True)
 
-    @commands.command(name='ping', description='Responds with pong.')
+    @commands.slash_command(name='ping', description='Responds with pong.')
     async def ping(ctx: discord.ApplicationContext):
         """
         Send 'pong' in response to 'ping'.
@@ -181,7 +180,7 @@ class DiscordCollabyBot(Bot):
         """
 
         # every new command will need to be added here
-        bot.add_cog(GitHubCog(bot))
-        bot.add_cog(JiraCog(bot))
-        cls.add_command(bot, command=cls.get_commands)
-        cls.add_command(bot, command=cls.ping)
+        bot.load_extension('cogs.github_cog')
+        bot.load_extension('cogs.jira_cog')
+        cls.add_application_command(bot, command=cls.get_commands)
+        cls.add_application_command(bot, command=cls.ping)

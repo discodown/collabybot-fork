@@ -14,7 +14,7 @@ nest_asyncio.apply()  # needed to prevent errors caused by nested async tasks
 load_dotenv()  # load env file
 intents = discord.Intents().all()  # default to all intents for bot
 discordToken = os.getenv('DISCORD_BOT_TOKEN')  # get bot token
-discordBot = DiscordCollabyBot(intents=intents, command_prefix='/', help_command=None)  # create the bot instance
+discordBot = DiscordCollabyBot(intents=intents, command_prefix='/')  # create the bot instance
 DiscordCollabyBot.add_all_commands(discordBot)  # register all bot commands before running the bot
 
 # Create FastAPI app

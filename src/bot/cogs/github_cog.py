@@ -46,7 +46,7 @@ class GitHubCog(commands.Cog):
             except TypeError:
                 print('No subscribers')
 
-    @commands.command(name='gh-pull-requests', description='Subscribe to pull request notifications in this channel.')
+    @commands.slash_command(name='gh-pull-requests', description='Subscribe to pull request notifications in this channel.')
     async def pull_requests(self, ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to pull request notifications.
@@ -58,7 +58,7 @@ class GitHubCog(commands.Cog):
         :return: None
         """
 
-        channel = ctx.message.channel.id
+        channel = ctx.channel.id
 
         if repo == '':
             await ctx.send(embed=discord.Embed(
@@ -102,7 +102,7 @@ class GitHubCog(commands.Cog):
                 description=f'#{ctx.channel} is already subscribed to to pull requests for {repo}.')
             )
 
-    @commands.command(name='gh-issues', description="Subscribe to issue notifications in this channel.")
+    @commands.slash_command(name='gh-issues', description="Subscribe to issue notifications in this channel.")
     async def issues(self, ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to issue notifications.
@@ -114,7 +114,7 @@ class GitHubCog(commands.Cog):
         :return: None
         """
 
-        channel = ctx.message.channel.id
+        channel = ctx.channel.id
 
         if repo == '':
             await ctx.send(embed=discord.Embed(
@@ -155,7 +155,7 @@ class GitHubCog(commands.Cog):
                 description=f'#{ctx.channel} is already subscribed to to pull requests for {repo}.')
             )
 
-    @commands.command(name='gh-add', description='Add a repo to the list of repositories you want notifications from.')
+    @commands.slash_command(name='gh-add', description='Add a repo to the list of repositories you want notifications from.')
     async def add(self, ctx: discord.ApplicationContext, repo=''):
         """
         Add a repository to CollabyBot's list of repositories.
@@ -198,7 +198,7 @@ class GitHubCog(commands.Cog):
                     description=f'{repo.name} has been added.')
                 )
 
-    @commands.command(name='gh-get-repos', description='See the list of repos added to CollabyBot.')
+    @commands.slash_command(name='gh-get-repos', description='See the list of repos added to CollabyBot.')
     async def get_repos(self, ctx: discord.ApplicationContext):
         """
         Get a list of repositories added to CollabyBot.
@@ -220,7 +220,7 @@ class GitHubCog(commands.Cog):
                                        description=f'{repo_list}')
             await ctx.send(embed=list_embed)
 
-    @commands.command(name='gh-commits', description='Subscribe to commit notifications in this channel.')
+    @commands.slash_command(name='gh-commits', description='Subscribe to commit notifications in this channel.')
     async def commits(self, ctx: discord.ApplicationContext, repo='', branch=''):
         """
         Subscribe a channel to commit notifications.
@@ -235,7 +235,7 @@ class GitHubCog(commands.Cog):
         :return: None
         """
 
-        channel = ctx.message.channel.id
+        channel = ctx.channel.id
 
         if repo == '':
             await ctx.send(embed=discord.Embed(
@@ -290,7 +290,7 @@ class GitHubCog(commands.Cog):
                         color=discord.Color.yellow(),
                         description=f'#{ctx.channel} is already subscribed to commits for {repo} on {branch}.'))
 
-    @commands.command(name='gh-open-pull-requests', description='Show open pull requests in testing repo.')
+    @commands.slash_command(name='gh-open-pull-requests', description='Show open pull requests in testing repo.')
     async def open_pull_requests(self, ctx: discord.ApplicationContext, repo=''):
         """
         Get a list of a repository's open pull requests.
@@ -318,3 +318,6 @@ class GitHubCog(commands.Cog):
             for pr in pulls:
                 openpr_embed.add_field(name=f'{pr.title}:', value=f'{pr.url}', inline=False)
             await ctx.send(embed=openpr_embed)
+
+def setup(bot):
+    bot.add_cog(GitHubCog(bot))
