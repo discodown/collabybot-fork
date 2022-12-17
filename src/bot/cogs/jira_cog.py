@@ -391,8 +391,6 @@ class JiraCog(commands.Cog):
         :return:
         """
         userId = ctx.message.author.id
-        msg = ctx.message.content
-        parts = msg.split()
 
         if issue_id == '':
             await ctx.send(embed=discord.Embed(
@@ -414,11 +412,10 @@ class JiraCog(commands.Cog):
             jiraInfo = jira_subscribers[userId]
             jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
-            issue_name = parts[1]
-            jira.assign_issue(issue_name, None)
+            jira.assign_issue(issue_id, None)
             await ctx.send(embed=discord.Embed(
                 color=discord.Color.green(),
                 title='Success',
-                description=f'{issue_name} has been unassigned.')
+                description=f'{issue_id} has been unassigned.')
             )
 
