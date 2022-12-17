@@ -6,10 +6,6 @@ from github import Github
 from jira import JIRA, JIRAError
 from discord.ext.pages import Page, Paginator
 
-from cogs.github_cog import *
-from cogs.jira_cog import *
-
-
 class DiscordCollabyBot(Bot):
     """
     Discord implementation of CollabyBot.
@@ -153,7 +149,7 @@ class DiscordCollabyBot(Bot):
         ))
 
         paginator = Paginator(pages=pages)
-        await paginator.respond(ctx.interaction, ephemeral=True)
+        await paginator.respond(ctx.interaction, ephemeral=False)
 
     @commands.slash_command(name='ping', description='Responds with pong.')
     async def ping(ctx: discord.ApplicationContext):
@@ -180,7 +176,7 @@ class DiscordCollabyBot(Bot):
         """
 
         # every new command will need to be added here
-        bot.load_extension('cogs.github_cog')
-        bot.load_extension('cogs.jira_cog')
+        bot.load_extension('src.bot.cogs.github_cog')
+        bot.load_extension('src.bot.cogs.jira_cog')
         cls.add_application_command(bot, command=cls.get_commands)
         cls.add_application_command(bot, command=cls.ping)
