@@ -1,48 +1,12 @@
-import pprint
-from src.bot.CollabyBot import DiscordCollabyBot
-from src.bot.github_objects import *
-import os
-from dotenv import load_dotenv
-import discord
-import asyncio
-from fastapi import FastAPI, Request, Response
+from bot.CollabyBot import DiscordCollabyBot
+from fastapi import Request, APIRouter
 import http
-import uvicorn
-import nest_asyncio
+from pprint import pprint
 
+router = APIRouter()
+discordBot = DiscordCollabyBot()
 
-nest_asyncio.apply()  # needed to prevent errors caused by nested async tasks
-load_dotenv()  # load env file
-intents = discord.Intents().all()  # default to all intents for bot
-discordToken = os.getenv('DISCORD_BOT_TOKEN')  # get bot token
-discordBot = DiscordCollabyBot(intents=intents, command_prefix='/')  # create the bot instance
-DiscordCollabyBot.add_all_commands(discordBot)  # register all bot commands before running the bot
-
-# Create FastAPI app
-app = FastAPI(
-    title="CollabyBot",
-    version="0.0.1",
-)
-
-app.payload = " "
-
-
-@app.get("/")
-async def root():
-    """
-    Root endpoint, needed for FastAPI to work.
-
-    :return: None
-    """
-
-    if app.payload == " ":
-        return {"message": "NO INCOMING POSTS"}
-
-    elif app.payload != " ":
-        return {"message": app.payload.sender}
-
-
-@app.post("/webhook/commits", status_code=http.HTTPStatus.ACCEPTED)
+@router.post("/webhook/commits", tags=['webhooks'], status_code=http.HTTPStatus.ACCEPTED)
 async def payload_handler_commits(
         request: Request
 ):
@@ -71,15 +35,16 @@ async def payload_handler_commits(
         print('No branch information in payload. Defaulting to main.')
         branch = 'main'
 
-    commit = Commit(str(payload_json.get('commits')[0].get('message')), 'commit',
+    commit = bot.github_objects.Commit(str(payload_json.get('commits')[0].get('message')), 'commit',
                     str(payload_json.get('repository').get('full_name')),
                     str(payload_json.get('commits')[0].get('timestamp')),
                     str(payload_json.get('commits')[0].get('url')),
                     str(payload_json.get('commits')[0].get('author').get('name')))
-    await discordBot.get_cog('GitHubCog').send_payload_message(commit.object_string(), event='push', repo=repo, branch=branch)
+    await discordBot.get_cog('GitHubCog').send_payload_message(commit.object_string(), event='push', repo=repo,
+                                                               branch=branch)
 
 
-@app.post("/webhook/issues", status_code=http.HTTPStatus.ACCEPTED)
+@router.post("/webhook/issues", tags=['webhooks'], status_code=http.HTTPStatus.ACCEPTED)
 async def payload_handler_issues(
         request: Request
 ):
@@ -106,14 +71,15 @@ async def payload_handler_issues(
         print('No branch information in payload. Defaulting to main.')
         branch = 'main'
 
-    issue = Issue(str(payload_json.get('issue').get('body')), str(payload_json.get('action')),
+    issue = bot.github_objects.Issue(str(payload_json.get('issue').get('body')), str(payload_json.get('action')),
                   str(payload_json.get('repository').get('full_name')),
                   str(payload_json.get('issue').get('created_at')), str(payload_json.get('issue').get('html_url')),
                   str(payload_json.get('issue').get('user').get('login')))
-    await discordBot.get_cog('GitHubCog').send_payload_message(issue.object_string(), event='issue', repo=repo, branch=branch)
+    await discordBot.get_cog('GitHubCog').send_payload_message(issue.object_string(), event='issue', repo=repo,
+                                                               branch=branch)
 
 
-@app.post("/webhook/pull-request", status_code=http.HTTPStatus.ACCEPTED)
+@router.post("/webhook/pull-request", tags=['webhooks'], status_code=http.HTTPStatus.ACCEPTED)
 async def payload_handler_pr(
         request: Request
 ):
@@ -132,7 +98,7 @@ async def payload_handler_pr(
     """
 
     payload_json = await request.json()
-    pprint.pprint(payload_json)
+    pprint(payload_json)
 
     repo = payload_json.get('repository')['name']
 
@@ -160,31 +126,9 @@ async def payload_handler_pr(
     else:
         pass
     # TODO: Add status check
-    PR = PullRequest(payload_json.get('action'), payload_json["pull_request"]["body"],
+    PR = bot.github_objects.PullRequest(payload_json.get('action'), payload_json["pull_request"]["body"],
                      payload_json["repository"]["full_name"], timestamp,
                      payload_json["pull_request"]["html_url"],
                      payload_json["pull_request"]["user"]["login"], reviewer_requested, reviewer, review_body, pr_state)
-    await discordBot.get_cog('GitHubCog').send_payload_message(PR.object_string(), event='pull_request', repo=repo, branch=branch)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Run the Discord bot as an asyncio task before starting the FastAPI server.
-
-    This is needed to prevent the bot from blocking the server from executing
-    any further code.
-
-    :return: None
-    """
-    asyncio.create_task(discordBot.start(discordToken))
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    cog = discordBot.get_cog('GitHubCog')
-    cog.save_dicts()
-
-
-# Run the server
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    await discordBot.get_cog('GitHubCog').send_payload_message(PR.object_string(), event='pull_request', repo=repo,
+                                                               branch=branch)

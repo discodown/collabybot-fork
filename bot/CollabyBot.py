@@ -66,6 +66,11 @@ class DiscordCollabyBot(Bot):
 
     """
 
+    def __new__(cls):
+        if not hasattr(cls, 'instance'):
+            cls.instance = super(DiscordCollabyBot, cls).__new__(cls)
+        return cls.instance
+
     async def on_ready(self):
         """
         Triggered when the bot becomes operational.

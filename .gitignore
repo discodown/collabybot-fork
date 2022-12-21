@@ -128,4 +128,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 /db/
-/src/bot/cogs/json_/
+/bot/cogs/json_/
