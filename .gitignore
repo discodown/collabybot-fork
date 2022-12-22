@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 /db/
 /bot/cogs/json_/
+/src/bot/cogs/json_/

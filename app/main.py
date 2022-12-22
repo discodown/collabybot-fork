@@ -17,8 +17,7 @@ intents = discord.Intents().all()  # default to all intents for bot
 discordToken = os.getenv('DISCORD_BOT_TOKEN')  # get bot token
 discordBot = DiscordCollabyBot(intents=intents, command_prefix='/')  # create the bot instance
 DiscordCollabyBot.add_all_commands(discordBot)  # register all bot commands before running the bot
-CLIENT_ID = os.getenv('CLIENT_ID')
-CLIENT_SECRET = os.getenv('CLIENT_SECRET')
+
 
 # Create FastAPI app
 app = FastAPI(

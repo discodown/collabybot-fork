@@ -1,10 +1,11 @@
+from queue import Queue
 import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 from github.MainClass import Github
+from github.GithubException import UnknownObjectException
 import json
 from os import curdir
-
 
 with open('src/bot/cogs/json_/repos.json') as f:
     repos = json.load(f)  # repo names and list of branches
@@ -18,15 +19,20 @@ with open('src/bot/cogs/json_/commit_subscribers.json') as f:
 with open('src/bot/cogs/json_/issue_subscribers.json') as f:
     issue_subscribers = json.load(f)  # channel ids of channels subscribed to issues
     f.close()
+with open('src/bot/cogs/json_/gh_tokens.json') as f:
+    gh_tokens = json.load(f)  # channel ids of channels subscribed to issues
+    f.close()
+
+URL = 'https://0671-72-78-191-96.ngrok.io'
+
 
 class GitHubCog(commands.Cog):
-
     def __init__(self, bot):
         self.bot = bot
+        self.auth_queue = Queue(maxsize=5)
 
     def save_dicts(self):
         with open('src/bot/cogs/json_/repos.json', 'w') as f:
-            print(repos)
             json.dump(repos, f)  # repo names and list of branches
             f.close()
         with open('src/bot/cogs/json_/pr_subscribers.json', 'w') as f:
@@ -37,6 +43,9 @@ class GitHubCog(commands.Cog):
             f.close()
         with open('src/bot/cogs/json_/issue_subscribers.json', 'w') as f:
             json.dump(issue_subscribers, f)  # channel ids of channels subscribed to issues
+            f.close()
+        with open('src/bot/cogs/json_/gh_tokens.json', 'w') as f:
+            json.dump(gh_tokens, f)  # channel ids of channels subscribed to issues
             f.close()
 
     async def send_payload_message(self, payload, event, repo, branch='main'):
@@ -71,7 +80,8 @@ class GitHubCog(commands.Cog):
             except TypeError:
                 print('No subscribers')
 
-    @commands.slash_command(name='gh-pull-requests', description='Subscribe to pull request notifications in this channel.')
+    @commands.slash_command(name='gh-pull-requests',
+                            description='Subscribe to pull request notifications in this channel.')
     async def pull_requests(self, ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to pull request notifications.
@@ -102,11 +112,11 @@ class GitHubCog(commands.Cog):
                 for r in repos[server].keys():
                     repo_list += f'{r}\n'
                 await ctx.respond('Subscribe to one of the following added repositories using '
-                               '**/gh-pull-requests <REPO_NAME>**:',
-                               embed=discord.Embed(color=discord.Color.yellow(),
-                                                   description=f'{repo_list}'
-                                                   )
-                               )
+                                  '**/gh-pull-requests <REPO_NAME>**:',
+                                  embed=discord.Embed(color=discord.Color.yellow(),
+                                                      description=f'{repo_list}'
+                                                      )
+                                  )
         elif repo not in repos[server].keys():
 
             await ctx.respond(embed=discord.Embed(
@@ -118,9 +128,9 @@ class GitHubCog(commands.Cog):
         elif channel not in pr_subscribers[repo]:
             pr_subscribers[repo].append(channel)
             await ctx.respond(embed=discord.Embed(color=discord.Color.green(),
-                                               title='Success',
-                                               description=f'#{ctx.channel} channel is now subscribed to pull requests for {repo}!')
-                           )
+                                                  title='Success',
+                                                  description=f'#{ctx.channel} channel is now subscribed to pull requests for {repo}!')
+                              )
         else:
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
@@ -158,9 +168,10 @@ class GitHubCog(commands.Cog):
                 repo_list = ''
                 for r in repos[server].keys():
                     repo_list += f'{r}\n'
-                await ctx.respond('Subscribe to one of the following added repositories using **/gh-issues <REPO_NAME>**:',
-                               embed=discord.Embed(color=discord.Color.yellow(),
-                                                   description=f'{repo_list}'))
+                await ctx.respond(
+                    'Subscribe to one of the following added repositories using **/gh-issues <REPO_NAME>**:',
+                    embed=discord.Embed(color=discord.Color.yellow(),
+                                        description=f'{repo_list}'))
 
         elif repo not in repos[server].keys():  # repo hasn't been added yet
             await ctx.respond(embed=discord.Embed(
@@ -181,8 +192,9 @@ class GitHubCog(commands.Cog):
                 description=f'#{ctx.channel} is already subscribed to to pull requests for {repo}.')
             )
 
-    @commands.slash_command(name='gh-add', description='Add a repo to the list of repositories you want notifications from.')
-    async def add(self, ctx: discord.ApplicationContext, repo=''):
+    @commands.slash_command(name='gh-add',
+                            description='Add a repo to the list of repositories you want notifications from.')
+    async def add(self, ctx: discord.ApplicationContext, repo_name=''):
         """
         Add a repository to CollabyBot's list of repositories.
 
@@ -197,36 +209,81 @@ class GitHubCog(commands.Cog):
 
         server = str(ctx.guild_id)
 
-        if repo == '':
+        if repo_name == '':
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 title='Usage',
                 description=f'/gh-add <REPO_OWNER>/<REPO_NAME>')
             )
         else:
-            # get repo via pygithub
-            g = Github()
-            repo = g.get_repo(repo)
-            if not repos.get(server):
-                repos[server] = {}
-            if repo.name in repos.get(server):
+            #split = repo.split('/')
+
+            token = gh_tokens.get(str(ctx.author.id))
+            if token is None:
                 await ctx.respond(embed=discord.Embed(
-                    color=discord.Color.yellow(),
-                    description=f'{repo.name} has already been added.')
+                    color=discord.Color.red(),
+                    title='Authentication Error',
+                    description=f'{ctx.author.name} has not been authenticated. Use /gh-auth to authenticate before'
+                                f'using GitHub commands.')
                 )
             else:
-                branches = repo.get_branches()  # get branches via pygithub
-                brs = [b.name for b in branches]
-                repos[server][repo.name] = brs  # dict entry for repo is list of branches
-                # initialize all subscriber lists
-                commit_subscribers[repo.name] = {b: [] for b in brs}
-                pr_subscribers[repo.name] = []
-                issue_subscribers[repo.name] = []
-                await ctx.respond(embed=discord.Embed(
-                    color=discord.Color.green(),
-                    title='Success',
-                    description=f'{repo.name} has been added.')
-                )
+                # get repo via pygithub
+                g = Github(token)
+                repo = g.get_repo(repo_name)
+                if not repos.get(server):
+                    repos[server] = {}
+                if repo.name in repos.get(server):
+                    await ctx.respond(embed=discord.Embed(
+                        color=discord.Color.yellow(),
+                        description=f'{repo.name} has already been added.')
+                    )
+                else:
+                    try:
+                        repo.create_hook(name='web',
+                                         config={'url': f'{URL}/webhook/commits',
+                                                 'content_type': 'json',
+                                                 'insecure_ssl': 1,
+                                                 },
+                                         events=['push'],
+                                         active=True
+                                         )
+                        repo.create_hook(name='web',
+                                         config={'url': f'{URL}/webhook/issues',
+                                                 'content_type': 'json',
+                                                 'insecure_ssl': 1,
+                                                 },
+                                         events=['issues'],
+                                         active=True
+                                         )
+                        repo.create_hook(name='web',
+                                         config={'url': f'{URL}/webhook/pull-request',
+                                                 'content_type': 'json',
+                                                 'insecure_ssl': 1,
+                                                 },
+                                         events=['pull_request'],
+                                         active=True
+                                         )
+
+                        branches = repo.get_branches()  # get branches via pygithub
+                        brs = [b.name for b in branches]
+                        repos[server][repo.name] = brs  # dict entry for repo is list of branches
+                        # initialize all subscriber lists
+                        commit_subscribers[repo.name] = {b: [] for b in brs}
+                        pr_subscribers[repo.name] = []
+                        issue_subscribers[repo.name] = []
+                        await ctx.respond(embed=discord.Embed(
+                            color=discord.Color.green(),
+                            title='Success',
+                            description=f'{repo.name} has been added.')
+                        )
+
+                    except UnknownObjectException:
+                        await ctx.respond(embed=discord.Embed(
+                            color=discord.Color.red(),
+                            title='Webhook Creation Failed',
+                            description=f'Webhook creation requires admin access to {repo_name}.')
+                        )
+
 
     @commands.slash_command(name='gh-get-repos', description='See the list of repos added to CollabyBot.')
     async def get_repos(self, ctx: discord.ApplicationContext):
@@ -287,9 +344,9 @@ class GitHubCog(commands.Cog):
                 for r in repos[server].keys():
                     repo_list += f'{r}\n'
                 await ctx.respond('Subscribe to one of the following added repositories '
-                               'using **/gh-commits <REPO_NAME> [BRANCH_NAME]**:',
-                               embed=discord.Embed(color=discord.Color.yellow(),
-                                                   description=f'{repo_list}'))
+                                  'using **/gh-commits <REPO_NAME> [BRANCH_NAME]**:',
+                                  embed=discord.Embed(color=discord.Color.yellow(),
+                                                      description=f'{repo_list}'))
         elif repo not in repos[server].keys():
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
@@ -351,5 +408,33 @@ class GitHubCog(commands.Cog):
                 openpr_embed.add_field(name=f'{pr.title}:', value=f'{pr.url}', inline=False)
             await ctx.respond(embed=openpr_embed)
 
+    @commands.slash_command(name='gh-auth',
+                            description='Authenticate with the CollabyBot OAuth app for full access to GitHub '
+                                        'repositories.')
+    async def gh_auth(self, ctx: discord.ApplicationContext):
+        user_id = ctx.author.id
+
+        self.auth_queue.put(user_id)
+
+        user = ctx.author
+
+        await user.send('Click here to authorize CollabyBot to access GitHub repositories on your behalf.',
+                        view=AuthButton())
+        await ctx.respond('Follow the link in your DMs to authorize CollabyBot on GitHub.')
+
+    def add_gh_token(self, token: str):
+        user = self.auth_queue.get()
+        gh_tokens[user] = token
+
+
 def setup(bot):
     bot.add_cog(GitHubCog(bot))
+
+
+class AuthButton(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+        button = discord.ui.Button(label="Authorize",
+                                   style=discord.ButtonStyle.link,
+                                   url='https://0671-72-78-191-96.ngrok.io/gh-auth')
+        self.add_item(button)
