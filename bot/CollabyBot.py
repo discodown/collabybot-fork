@@ -66,6 +66,11 @@ class DiscordCollabyBot(Bot):
 
     """
 
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, 'instance'):
+            cls.instance = super(DiscordCollabyBot, cls).__new__(cls)
+        return cls.instance
+
     async def on_ready(self):
         """
         Triggered when the bot becomes operational.
@@ -176,7 +181,7 @@ class DiscordCollabyBot(Bot):
         """
 
         # every new command will need to be added here
-        bot.load_extension('src.bot.cogs.github_cog')
-        bot.load_extension('src.bot.cogs.jira_cog')
+        bot.load_extension('bot.cogs.github_cog')
+        bot.load_extension('bot.cogs.jira_cog')
         cls.add_application_command(bot, command=cls.get_commands)
         cls.add_application_command(bot, command=cls.ping)
