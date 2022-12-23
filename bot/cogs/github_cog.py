@@ -7,23 +7,23 @@ from github.GithubException import UnknownObjectException
 import json
 from os import curdir
 
-with open('src/bot/cogs/json_/repos.json') as f:
+with open('bot/cogs/json_/repos.json') as f:
     repos = json.load(f)  # repo names and list of branches
     f.close()
-with open('src/bot/cogs/json_/pr_subscribers.json') as f:
+with open('bot/cogs/json_/pr_subscribers.json') as f:
     pr_subscribers = json.load(f)  # channel ids of channels subscribed to pull requests
     f.close()
-with open('src/bot/cogs/json_/commit_subscribers.json') as f:
+with open('bot/cogs/json_/commit_subscribers.json') as f:
     commit_subscribers = json.load(f)  # channel ids of channels subscribed to commits, one list per branch
     f.close()
-with open('src/bot/cogs/json_/issue_subscribers.json') as f:
+with open('bot/cogs/json_/issue_subscribers.json') as f:
     issue_subscribers = json.load(f)  # channel ids of channels subscribed to issues
     f.close()
-with open('src/bot/cogs/json_/gh_tokens.json') as f:
+with open('bot/cogs/json_/gh_tokens.json') as f:
     gh_tokens = json.load(f)  # channel ids of channels subscribed to issues
     f.close()
 
-URL = 'https://0671-72-78-191-96.ngrok.io'
+URL = 'https://9a28-104-254-90-195.ngrok.io'
 
 
 class GitHubCog(commands.Cog):
@@ -32,19 +32,19 @@ class GitHubCog(commands.Cog):
         self.auth_queue = Queue(maxsize=5)
 
     def save_dicts(self):
-        with open('src/bot/cogs/json_/repos.json', 'w') as f:
+        with open('bot/cogs/json_/repos.json', 'w') as f:
             json.dump(repos, f)  # repo names and list of branches
             f.close()
-        with open('src/bot/cogs/json_/pr_subscribers.json', 'w') as f:
+        with open('bot/cogs/json_/pr_subscribers.json', 'w') as f:
             json.dump(pr_subscribers, f)  # channel ids of channels subscribed to pull requests
             f.close()
-        with open('src/bot/cogs/json_/commit_subscribers.json', 'w') as f:
+        with open('bot/cogs/json_/commit_subscribers.json', 'w') as f:
             json.dump(commit_subscribers, f)  # channel ids of channels subscribed to commits, one list per branch
             f.close()
-        with open('src/bot/cogs/json_/issue_subscribers.json', 'w') as f:
+        with open('bot/cogs/json_/issue_subscribers.json', 'w') as f:
             json.dump(issue_subscribers, f)  # channel ids of channels subscribed to issues
             f.close()
-        with open('src/bot/cogs/json_/gh_tokens.json', 'w') as f:
+        with open('bot/cogs/json_/gh_tokens.json', 'w') as f:
             json.dump(gh_tokens, f)  # channel ids of channels subscribed to issues
             f.close()
 
@@ -414,17 +414,14 @@ class GitHubCog(commands.Cog):
     async def gh_auth(self, ctx: discord.ApplicationContext):
         user_id = ctx.author.id
 
-        self.auth_queue.put(user_id)
-
         user = ctx.author
 
         await user.send('Click here to authorize CollabyBot to access GitHub repositories on your behalf.',
-                        view=AuthButton())
+                        view=AuthButton(user_id))
         await ctx.respond('Follow the link in your DMs to authorize CollabyBot on GitHub.')
 
-    def add_gh_token(self, token: str):
-        user = self.auth_queue.get()
-        gh_tokens[user] = token
+    def add_gh_token(self, user_id: str, token: str):
+        gh_tokens[user_id] = token
 
 
 def setup(bot):
@@ -432,9 +429,9 @@ def setup(bot):
 
 
 class AuthButton(discord.ui.View):
-    def __init__(self):
+    def __init__(self, user_id: int):
         super().__init__()
         button = discord.ui.Button(label="Authorize",
                                    style=discord.ButtonStyle.link,
-                                   url='https://0671-72-78-191-96.ngrok.io/gh-auth')
+                                   url=f'https://9a28-104-254-90-195.ngrok.io/auth/github/{user_id}')
         self.add_item(button)

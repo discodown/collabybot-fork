@@ -8,7 +8,7 @@ from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 
-jira_subscribers = {}
+jira_tokens = {}
 
 class JiraCog(commands.Cog):
 
@@ -93,34 +93,6 @@ class JiraCog(commands.Cog):
         # Return the filename
         return filename
 
-    @commands.slash_command(name='jira-setup-token', description='Set up Jira Token to monitor Jira Issues.')
-    async def jira_setup_token(self, ctx: discord.ApplicationContext, email='', url='', token=''):
-        """
-        Setup a Jira token to monitor issues in a Jira workspace.
-
-        Requires an email address, workspace URL, and Jira authentication token. If any of them
-        are not passed as arguments to the command, responds with usage instructions. If they
-        are all present, a dict of Jira info is created and added to the list of
-        Jira subscribers. If the user ID is already in the list of subscribers, simply
-        update the info.
-
-        :return: None
-        """
-
-        userId = ctx.user.id
-
-        # TODO: Make authenticated list based on Discord server not single users
-        jiraInfo = {}
-        jiraInfo["url"] = url
-        jiraInfo["email"] = email
-        jiraInfo["token"] = token
-
-        if userId in jira_subscribers:
-            jira_subscribers[userId] = jiraInfo
-            await ctx.respond('Token updated.')
-        else:
-            jira_subscribers[userId] = jiraInfo
-            await ctx.respond('Token registered.')
 
     @commands.slash_command(name='jira-issue',
                       description='Get summary, description, issue type, and assignee of a Jira issue.')
@@ -143,7 +115,7 @@ class JiraCog(commands.Cog):
                 description='/jira-issue <ISSUE_ID>')
             )
         else:
-            tokenExists = (userId in jira_subscribers)
+            tokenExists = (userId in jira_tokens)
             if tokenExists == False:
                 await ctx.respond(embed=discord.Embed(
                     color=discord.Color.red(),
@@ -151,7 +123,7 @@ class JiraCog(commands.Cog):
                     description=f'User {ctx.user.name} is not authenticated with Jira.')
                 )
             else:
-                jiraInfo = jira_subscribers[userId]
+                jiraInfo = jira_tokens[userId]
                 jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
                 issue = jira.issue(issue_id)
 
@@ -180,7 +152,7 @@ class JiraCog(commands.Cog):
         userId = ctx.user.id
         msg = ctx.message.content
 
-        tokenExists = (userId in jira_subscribers)
+        tokenExists = (userId in jira_tokens)
         if tokenExists == False:
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.red(),
@@ -189,7 +161,7 @@ class JiraCog(commands.Cog):
             )
             return
 
-        jiraInfo = jira_subscribers[userId]
+        jiraInfo = jira_tokens[userId]
         jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
         # No args
@@ -256,7 +228,7 @@ class JiraCog(commands.Cog):
 
         userId = ctx.user.id
 
-        tokenExists = (userId in jira_subscribers)
+        tokenExists = (userId in jira_tokens)
         if tokenExists == False:
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.red(),
@@ -265,7 +237,7 @@ class JiraCog(commands.Cog):
             )
             return
 
-        jiraInfo = jira_subscribers[userId]
+        jiraInfo = jira_tokens[userId]
         jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
         # TODO: Move to utils
@@ -391,7 +363,7 @@ class JiraCog(commands.Cog):
             )
             return
         else:
-            tokenExists = (userId in jira_subscribers)
+            tokenExists = (userId in jira_tokens)
             if tokenExists == False:
                 await ctx.respond(embed=discord.Embed(
                     color=discord.Color.red(),
@@ -400,7 +372,7 @@ class JiraCog(commands.Cog):
                 )
                 return
 
-            jiraInfo = jira_subscribers[userId]
+            jiraInfo = jira_tokens[userId]
             jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
 
             jira.assign_issue(issue_id, None)
@@ -410,5 +382,24 @@ class JiraCog(commands.Cog):
                 description=f'{issue_id} has been unassigned.')
             )
 
+    @commands.slash_command(name='jira-auth', description='Authenticate with the CollabyBot OAuth app to use Jira commands'
+                                                          'that access the Jira API.')
+    async def jira_auth(self, ctx: discord.ApplicationContext):
+        user_id = str(ctx.author.id)
+        user = ctx.author
+        await user.send('Click here to authorize CollabyBot to access the Jira API.',
+                        view=AuthButton(user_id))
+        await ctx.respond('Follow the link in your DMs to authorize CollabyBot on Jira.')
+
+
 def setup(bot):
     bot.add_cog(JiraCog(bot))
+
+
+class AuthButton(discord.ui.View):
+    def __init__(self, user_id: int):
+        super().__init__()
+        button = discord.ui.Button(label="Authorize",
+                                   style=discord.ButtonStyle.link,
+                                   url=f'https://9a28-104-254-90-195.ngrok.io/auth/jira/user_id={user_id}')
+        self.add_item(button)
