@@ -1,29 +1,31 @@
 from queue import Queue
 import discord
+from discord import Guild, Member
 from discord.ext import commands
+from discord.ext.bridge import guild_only
 from discord.ext.commands import Context
 from github.MainClass import Github
 from github.GithubException import UnknownObjectException
 import json
 from os import curdir
 
-with open('src/bot/cogs/json_/repos.json') as f:
+with open('bot/cogs/json_/repos.json') as f:
     repos = json.load(f)  # repo names and list of branches
     f.close()
-with open('src/bot/cogs/json_/pr_subscribers.json') as f:
+with open('bot/cogs/json_/pr_subscribers.json') as f:
     pr_subscribers = json.load(f)  # channel ids of channels subscribed to pull requests
     f.close()
-with open('src/bot/cogs/json_/commit_subscribers.json') as f:
+with open('bot/cogs/json_/commit_subscribers.json') as f:
     commit_subscribers = json.load(f)  # channel ids of channels subscribed to commits, one list per branch
     f.close()
-with open('src/bot/cogs/json_/issue_subscribers.json') as f:
+with open('bot/cogs/json_/issue_subscribers.json') as f:
     issue_subscribers = json.load(f)  # channel ids of channels subscribed to issues
     f.close()
-with open('src/bot/cogs/json_/gh_tokens.json') as f:
+with open('bot/cogs/json_/gh_tokens.json') as f:
     gh_tokens = json.load(f)  # channel ids of channels subscribed to issues
     f.close()
 
-URL = 'https://0671-72-78-191-96.ngrok.io'
+URL = 'https://9a28-104-254-90-195.ngrok.io'
 
 
 class GitHubCog(commands.Cog):
@@ -31,20 +33,62 @@ class GitHubCog(commands.Cog):
         self.bot = bot
         self.auth_queue = Queue(maxsize=5)
 
+    @commands.Cog.listener()
+    async def on_guild_remove(self, guild: Guild):
+
+        server = str(guild.id)
+        members = guild.members
+
+        for user in members:
+            if gh_tokens.get(str(user.id)) is not None:
+                gh_tokens.pop(str(user.id))
+
+        for repo in repos.get(server):
+            if issue_subscribers.get(repo) is not None:
+                issue_subscribers.pop(repo)
+            if commit_subscribers.get(repo) is not None:
+                commit_subscribers.pop(repo)
+            if pr_subscribers.get(repo) is not None:
+                pr_subscribers.pop(repo)
+
+        if repos.get(server) is not None:
+            repos.pop(server)
+        self.save_dicts()
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: Member):
+        """
+        Remove existing records of a member when the leave the server.
+
+        Parameters
+        ----------
+        member
+
+        Returns
+        -------
+        None
+        """
+
+        user = str(member.id)
+
+        if gh_tokens.get(user) is not None:
+            gh_tokens.pop(user)
+        self.save_dicts()
+
     def save_dicts(self):
-        with open('src/bot/cogs/json_/repos.json', 'w') as f:
+        with open('bot/cogs/json_/repos.json', 'w') as f:
             json.dump(repos, f)  # repo names and list of branches
             f.close()
-        with open('src/bot/cogs/json_/pr_subscribers.json', 'w') as f:
+        with open('bot/cogs/json_/pr_subscribers.json', 'w') as f:
             json.dump(pr_subscribers, f)  # channel ids of channels subscribed to pull requests
             f.close()
-        with open('src/bot/cogs/json_/commit_subscribers.json', 'w') as f:
+        with open('bot/cogs/json_/commit_subscribers.json', 'w') as f:
             json.dump(commit_subscribers, f)  # channel ids of channels subscribed to commits, one list per branch
             f.close()
-        with open('src/bot/cogs/json_/issue_subscribers.json', 'w') as f:
+        with open('bot/cogs/json_/issue_subscribers.json', 'w') as f:
             json.dump(issue_subscribers, f)  # channel ids of channels subscribed to issues
             f.close()
-        with open('src/bot/cogs/json_/gh_tokens.json', 'w') as f:
+        with open('bot/cogs/json_/gh_tokens.json', 'w') as f:
             json.dump(gh_tokens, f)  # channel ids of channels subscribed to issues
             f.close()
 
@@ -82,6 +126,7 @@ class GitHubCog(commands.Cog):
 
     @commands.slash_command(name='gh-pull-requests',
                             description='Subscribe to pull request notifications in this channel.')
+    @guild_only()
     async def pull_requests(self, ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to pull request notifications.
@@ -129,15 +174,16 @@ class GitHubCog(commands.Cog):
             pr_subscribers[repo].append(channel)
             await ctx.respond(embed=discord.Embed(color=discord.Color.green(),
                                                   title='Success',
-                                                  description=f'#{ctx.channel} channel is now subscribed to pull requests for {repo}!')
+                                                  description=f'#{ctx.channel.name} channel is now subscribed to pull requests for {repo}!')
                               )
         else:
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
-                description=f'#{ctx.channel} is already subscribed to to pull requests for {repo}.')
+                description=f'#{ctx.channel.name} is already subscribed to to pull requests for {repo}.')
             )
 
     @commands.slash_command(name='gh-issues', description="Subscribe to issue notifications in this channel.")
+    @guild_only()
     async def issues(self, ctx: discord.ApplicationContext, repo=''):
         """
         Subscribe a channel to issue notifications.
@@ -183,17 +229,18 @@ class GitHubCog(commands.Cog):
         elif channel not in issue_subscribers[repo]:  # channel isn't subscribed
             issue_subscribers[repo].append(channel)
             subscribe_embed = discord.Embed(color=discord.Color.green(), title='Success',
-                                            description=f'#{ctx.channel} channel is now subscribed to issues for {repo}!')
+                                            description=f'#{ctx.channel.name} channel is now subscribed to issues for {repo}!')
             await ctx.respond(embed=subscribe_embed)
 
         else:  # channel is already subscribed
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
-                description=f'#{ctx.channel} is already subscribed to to pull requests for {repo}.')
+                description=f'#{ctx.channel.name} is already subscribed to to pull requests for {repo}.')
             )
 
     @commands.slash_command(name='gh-add',
                             description='Add a repo to the list of repositories you want notifications from.')
+    @guild_only()
     async def add(self, ctx: discord.ApplicationContext, repo_name=''):
         """
         Add a repository to CollabyBot's list of repositories.
@@ -232,13 +279,15 @@ class GitHubCog(commands.Cog):
                 repo = g.get_repo(repo_name)
                 if not repos.get(server):
                     repos[server] = {}
-                if repo.name in repos.get(server):
+                if repo.full_name in repos.get(server):
                     await ctx.respond(embed=discord.Embed(
                         color=discord.Color.yellow(),
-                        description=f'{repo.name} has already been added.')
+                        description=f'{repo.full_name} has already been added.')
                     )
                 else:
                     try:
+                        # TODO: Only one server can track a repo this way because the webhook will already exist
+                        # Catch 422 Exception?
                         repo.create_hook(name='web',
                                          config={'url': f'{URL}/webhook/commits',
                                                  'content_type': 'json',
@@ -266,17 +315,17 @@ class GitHubCog(commands.Cog):
 
                         branches = repo.get_branches()  # get branches via pygithub
                         brs = [b.name for b in branches]
-                        repos[server][repo.name] = brs  # dict entry for repo is list of branches
+                        repos[server][repo.full_name] = brs  # dict entry for repo is list of branches
                         # initialize all subscriber lists
-                        commit_subscribers[repo.name] = {b: [] for b in brs}
-                        pr_subscribers[repo.name] = []
-                        issue_subscribers[repo.name] = []
+                        commit_subscribers[repo.full_name] = {b: [] for b in brs}
+                        pr_subscribers[repo.full_name] = []
+                        issue_subscribers[repo.full_name] = []
                         await ctx.respond(embed=discord.Embed(
                             color=discord.Color.green(),
                             title='Success',
-                            description=f'{repo.name} has been added.')
+                            description=f'{repo.full_name} has been added.')
                         )
-
+                    # TODO: Find the status code and catch that exception?
                     except UnknownObjectException:
                         await ctx.respond(embed=discord.Embed(
                             color=discord.Color.red(),
@@ -286,6 +335,7 @@ class GitHubCog(commands.Cog):
 
 
     @commands.slash_command(name='gh-get-repos', description='See the list of repos added to CollabyBot.')
+    @guild_only()
     async def get_repos(self, ctx: discord.ApplicationContext):
         """
         Get a list of repositories added to CollabyBot.
@@ -360,26 +410,27 @@ class GitHubCog(commands.Cog):
                         await ctx.respond(embed=discord.Embed(
                             color=discord.Color.green(),
                             title='Success',
-                            description=f'#{ctx.channel} is now subscribed to commits for {repo} on {b}!')
+                            description=f'#{ctx.channel.name} is now subscribed to commits for {repo} on {b}!')
                         )
                     else:
                         await ctx.respond(embed=discord.Embed(
                             color=discord.Color.yellow(),
-                            description=f'#{ctx.channel} is already subscribed to commits for {repo} on {branch}.'))
+                            description=f'#{ctx.channel.name} is already subscribed to commits for {repo} on {branch}.'))
             else:
                 if channel not in commit_subscribers[repo][branch]:
                     commit_subscribers[repo][branch].append(channel)
                     await ctx.respond(embed=discord.Embed(
                         color=discord.Color.green(),
                         title='Success',
-                        description=f'#{ctx.channel} is now subscribed to commits for {repo} on {branch}!'
+                        description=f'#{ctx.channel.name} is now subscribed to commits for {repo} on {branch}!'
                     ))
                 else:
                     await ctx.respond(embed=discord.Embed(
                         color=discord.Color.yellow(),
-                        description=f'#{ctx.channel} is already subscribed to commits for {repo} on {branch}.'))
+                        description=f'#{ctx.channel.name} is already subscribed to commits for {repo} on {branch}.'))
 
     @commands.slash_command(name='gh-open-pull-requests', description='Show open pull requests in testing repo.')
+    @guild_only()
     async def open_pull_requests(self, ctx: discord.ApplicationContext, repo=''):
         """
         Get a list of a repository's open pull requests.
@@ -411,30 +462,38 @@ class GitHubCog(commands.Cog):
     @commands.slash_command(name='gh-auth',
                             description='Authenticate with the CollabyBot OAuth app for full access to GitHub '
                                         'repositories.')
+    @guild_only()
     async def gh_auth(self, ctx: discord.ApplicationContext):
-        user_id = ctx.author.id
+        user_id = str(ctx.author.id)
 
-        self.auth_queue.put(user_id)
+        if gh_tokens.get(user_id) is not None:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='User Already Authenticated',
+                description=f'User {ctx.user.name} is already authenticated with GitHub.')
+            )
+        else:
+            self.auth_queue.put(user_id)
+            user = ctx.author
 
-        user = ctx.author
+            await user.send('Click here to authorize CollabyBot to access GitHub repositories on your behalf.',
+                            view=AuthButton(user_id))
+            await ctx.respond('Follow the link in your DMs to authorize CollabyBot on GitHub.')
 
-        await user.send('Click here to authorize CollabyBot to access GitHub repositories on your behalf.',
-                        view=AuthButton())
-        await ctx.respond('Follow the link in your DMs to authorize CollabyBot on GitHub.')
-
-    def add_gh_token(self, token: str):
-        user = self.auth_queue.get()
-        gh_tokens[user] = token
-
+    async def add_gh_token(self, token: str):
+        user_id = self.auth_queue.get()
+        gh_tokens[user_id] = token
+        user = await self.bot.fetch_user(int(user_id))
+        await user.send('Authentication complete.')
 
 def setup(bot):
     bot.add_cog(GitHubCog(bot))
 
 
 class AuthButton(discord.ui.View):
-    def __init__(self):
+    def __init__(self, user_id: int):
         super().__init__()
         button = discord.ui.Button(label="Authorize",
                                    style=discord.ButtonStyle.link,
-                                   url='https://0671-72-78-191-96.ngrok.io/gh-auth')
+                                   url=f'https://9a28-104-254-90-195.ngrok.io/auth/github')
         self.add_item(button)
