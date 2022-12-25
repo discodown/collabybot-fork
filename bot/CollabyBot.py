@@ -1,6 +1,7 @@
 import discord
+from discord import Guild
 from discord.ext import commands
-from discord.ext.commands import Bot
+from discord.ext.commands import Bot, guild_only, errors
 from discord.ext.commands.errors import CommandInvokeError
 from github import Github
 from jira import JIRA, JIRAError
@@ -95,16 +96,11 @@ class DiscordCollabyBot(Bot):
         :return: None
         """
 
+        if message.channel.type == 'private':
+            return
         # make sure that bot doesn't respond to itself
         if message.author == self.user:
             return
-
-        username = str(message.author)
-        user_message = str(message.content)
-        channel = str(message.channel)
-
-        # prints in terminal message log
-        print(f'{username} said {user_message} in channel #{channel}')
 
         await self.process_commands(message)
 
@@ -118,6 +114,7 @@ class DiscordCollabyBot(Bot):
         pass
 
     @commands.slash_command(name='commands', description='List all supported commands.')
+    @guild_only()
     async def get_commands(ctx: discord.ApplicationContext):
         """
         Send a message listing all of CollabyBot's Discord slash commands.
@@ -157,6 +154,7 @@ class DiscordCollabyBot(Bot):
         await paginator.respond(ctx.interaction, ephemeral=False)
 
     @commands.slash_command(name='ping', description='Responds with pong.')
+    @guild_only()
     async def ping(ctx: discord.ApplicationContext):
         """
         Send 'pong' in response to 'ping'.
@@ -165,7 +163,7 @@ class DiscordCollabyBot(Bot):
 
         :return: None
         """
-        await ctx.send('Pong.')
+        await ctx.respond('Pong.')
 
     @classmethod
     def add_all_commands(cls, bot):

@@ -29,7 +29,7 @@ async def payload_handler_commits(
     else:
         payload_json = await request.json()
         # TODO: Add status check, add modifief param
-        repo = payload_json.get('repository')['name']
+        repo = payload_json.get('repository')['full_name']
 
         # Get branch
         try:
@@ -69,7 +69,7 @@ async def payload_handler_issues(
     else:
         payload_json = await request.json()
         # TODO: Add status check, add modified param
-        repo = payload_json.get('repository')['name']
+        repo = payload_json.get('repository')['full_name']
 
         try:
             branch = payload_json.get('ref').split('/')[-1]
@@ -107,7 +107,7 @@ async def payload_handler_pr(
         pass
     else:
         payload_json = await request.json()
-        repo = payload_json.get('repository')['name']
+        repo = payload_json.get('repository')['full_name']
 
         try:
             branch = payload_json.get('ref').split('/')[-1]

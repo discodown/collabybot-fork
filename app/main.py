@@ -63,6 +63,8 @@ async def startup_event():
 async def shutdown_event():
     cog = discordBot.get_cog('GitHubCog')
     cog.save_dicts()
+    cog = discordBot.get_cog('JiraCog')
+    cog.save_dicts()
 
 
 # Run the server

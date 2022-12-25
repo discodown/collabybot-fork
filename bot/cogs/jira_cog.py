@@ -1,19 +1,89 @@
+import json
+import os
+
 import discord
+import requests
+from discord import Guild, Member, guild_only
 from discord.ext import commands
 from discord.ext.commands import Context
 from discord.ext.pages import Page, Paginator
 from jira import JIRA, JIRAError
-from os import remove
+from os import remove, getenv
 from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
+from queue import Queue
 
-jira_tokens = {}
+JIRA_RESOURCES_ENDPOINT = os.getenv('JIRA_RESOURCES_ENDPOINT')
+JIRA_API_URL = os.getenv('JIRA_API_URL')
+
+with open('bot/cogs/json_/jira_tokens.json') as f:
+    jira_tokens = json.load(f)  # channel ids of channels subscribed to issues
+    f.close()
+with open('bot/cogs/json_/jira_sites.json') as f:
+    jira_sites = json.load(f)  # channel ids of channels subscribed to issues
+    f.close()
+
 
 class JiraCog(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        self.auth_queue_users = Queue(maxsize=5)
+
+    @commands.Cog.listener()
+    async def on_guild_remove(self, guild: Guild):
+        """
+        Delete existing records of guild and its members when the guild is deleted or the
+        bot is removed.
+
+        Parameters
+        ----------
+        guild
+
+        Returns
+        -------
+        None
+        """
+
+        user = str(guild.id)
+        members = guild.members
+
+        for user in members:
+            if jira_tokens.get(str(user.id)) is not None:
+                jira_tokens.pop(str(user.id))
+
+        if jira_sites.get(user) is not None:
+            jira_sites.pop(user)
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: Member):
+        """
+        Remove existing records of a member when the leave the server.
+
+        Parameters
+        ----------
+        member
+
+        Returns
+        -------
+        None
+        """
+
+        user = str(member.id)
+
+        if jira_tokens.get(user) is not None:
+            jira_tokens.pop(user)
+
+        self.save_dicts()
+
+    def save_dicts(self):
+        with open('bot/cogs/json_/jira_tokens.json', 'w') as f:
+            json.dump(jira_tokens, f)  # channel ids of channels subscribed to issues
+            f.close()
+        with open('bot/cogs/json_/jira_sites.json', 'w') as f:
+            json.dump(jira_sites, f)  # channel ids of channels subscribed to issues
+            f.close()
 
     def burndown(self, jira, issues):
         """
@@ -68,7 +138,7 @@ class JiraCog(commands.Cog):
             remaining_points[d.strftime('%Y-%m-%d')] = int(remaining)  # Put remaining points value in date/points dict
 
         slope = -total_points / (
-                    len(remaining_points.keys()) - 1)  # get slope of ideal pace for guideline (linear decline)
+                len(remaining_points.keys()) - 1)  # get slope of ideal pace for guideline (linear decline)
 
         # Create guideline
         guideline = {}
@@ -93,9 +163,9 @@ class JiraCog(commands.Cog):
         # Return the filename
         return filename
 
-
     @commands.slash_command(name='jira-issue',
-                      description='Get summary, description, issue type, and assignee of a Jira issue.')
+                            description='Get summary, description, issue type, and assignee of a Jira issue.')
+    @guild_only()
     async def jira_get_issue(self, ctx: discord.ApplicationContext, issue_id=''):
         """
         Respond with information about a Jira issue.
@@ -107,37 +177,59 @@ class JiraCog(commands.Cog):
         :return: None
         """
 
-        userId = ctx.user.id
+        user_id = str(ctx.user.id)
+        server = str(ctx.guild_id)
+        token = jira_tokens.get(user_id)
+        site = jira_sites.get(server)
         if issue_id == '':
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 title='Usage',
                 description='/jira-issue <ISSUE_ID>')
             )
+        elif token is None:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.user.name} is not authenticated with Jira.')
+            )
+        elif site is None:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Instance Not Set',
+                description=f'No Jira instance has been associated with this server yet. Use /jira-set-instance to set'
+                            f' one up.')
+            )
+        # Expired token
+        elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error: Expired Token',
+                description=f'It looks like {ctx.user.name}\'s OAuth token has expired. Use /jira-auth to get'
+                            f' a new token.')
+            )
         else:
-            tokenExists = (userId in jira_tokens)
-            if tokenExists == False:
-                await ctx.respond(embed=discord.Embed(
-                    color=discord.Color.red(),
-                    title='Authentication Error',
-                    description=f'User {ctx.user.name} is not authenticated with Jira.')
-                )
-            else:
-                jiraInfo = jira_tokens[userId]
-                jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
-                issue = jira.issue(issue_id)
+            options = {
+                'server': f'{JIRA_API_URL}/{site[1]}',
+                'headers': {
+                    'Authorization': f'Bearer {token[0]}'
+                }
+            }
+            jira = JIRA(options=options)
+            issue = jira.issue(issue_id)
 
-                embed = discord.Embed(color=discord.Color.blurple(), title=issue_id)
-                embed.add_field(name=f'Summary:', value=issue.fields.summary, inline=False)
-                embed.add_field(name=f'Description:', value=issue.fields.description, inline=False)
-                if issue.fields.assignee is None:
-                    embed.add_field(name=f'Assignee:', value='Unassigned', inline=False)
-                else:
-                    embed.add_field(name=f'Assignee:', value=issue.fields.assignee.displayName, inline=False)
-                embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
-                await ctx.respond(embed=embed)
+            embed = discord.Embed(color=discord.Color.blurple(), title=issue_id)
+            embed.add_field(name=f'Summary:', value=issue.fields.summary, inline=False)
+            embed.add_field(name=f'Description:', value=issue.fields.description, inline=False)
+            if issue.fields.assignee is None:
+                embed.add_field(name=f'Assignee:', value='Unassigned', inline=False)
+            else:
+                embed.add_field(name=f'Assignee:', value=issue.fields.assignee.displayName, inline=False)
+            embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
+            await ctx.respond(embed=embed)
 
     @commands.slash_command(name='jira-sprint', description='Get summary of a project\'s active sprint.')
+    @guild_only()
     async def jira_get_sprint(self, ctx: discord.ApplicationContext, project_id=''):
         """
         Get information about the current sprint in a Jira project.
@@ -149,34 +241,59 @@ class JiraCog(commands.Cog):
         :return: None
         """
 
-        userId = ctx.user.id
-        msg = ctx.message.content
-
-        tokenExists = (userId in jira_tokens)
-        if tokenExists == False:
+        user_id = str(ctx.user.id)
+        server = str(ctx.guild_id)
+        token = jira_tokens.get(user_id)
+        site = jira_sites.get(server)
+        if token is None:
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.red(),
                 title='Authentication Error',
                 description=f'User {ctx.user.name} is not authenticated with Jira.')
             )
-            return
-
-        jiraInfo = jira_tokens[userId]
-        jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
-
+        elif site is None:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Instance Not Set',
+                description=f'No Jira instance has been associated with this server yet. Use /jira-set-instance to set'
+                            f' one up.')
+            )
+        # Expired token
+        elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error: Expired Token',
+                description=f'It looks like {ctx.user.name}\'s OAuth token has expired. Use /jira-auth to get'
+                            f' a new token.')
+            )
         # No args
-        if project_id == '':
+        elif project_id == '':
             await ctx.respond(embed=discord.Embed(
                 title='Usage',
                 color=discord.Color.yellow(),
                 description='/sprint <PROJECT_ID>')
             )
+            options = {
+                'server': f'{JIRA_API_URL}/{site[1]}',
+                'headers': {
+                    'Authorization': f'Bearer {token[0]}'
+                }
+            }
+            jira = JIRA(options=options)
             embed = discord.Embed(color=discord.Color.yellow(), title="Available Projects")
             projects = jira.projects()
             for project in projects:
                 embed.add_field(name=project.name, value=f'Project ID: {project.id}', inline=False)
             await ctx.respond(embed=embed)
+
         else:
+            options = {
+                'server': f'{JIRA_API_URL}/{site[1]}',
+                'headers': {
+                    'Authorization': f'Bearer {token[0]}'
+                }
+            }
+            jira = JIRA(options=options)
             # Find issues from the project's current sprint using JQL query
             query = 'project={0} AND SPRINT not in closedSprints() AND sprint not in futureSprints()'.format(project_id)
             issues = jira.search_issues(query)
@@ -207,7 +324,7 @@ class JiraCog(commands.Cog):
                     embeds=[embeds[i]]
                 ))
             paginator = Paginator(pages=pages)
-            await paginator.respond(ctx.interaction, ephemeral=True)
+            await paginator.respond(ctx.interaction, ephemeral=False)
 
             # Create burndown chart
             burndown_chart = self.burndown(jira, issues)
@@ -217,6 +334,7 @@ class JiraCog(commands.Cog):
             remove(burndown_chart)  # Delete chart after sending it
 
     @commands.slash_command(name='jira-assign', description='Assign a Jira issue to a user.')
+    @guild_only()
     async def jira_assign_issue(self, ctx: discord.ApplicationContext, issue_id='', user_id=''):
         """
         Assign a Jira ticket to a user.
@@ -226,95 +344,136 @@ class JiraCog(commands.Cog):
         :return: None
         """
 
-        userId = ctx.user.id
+        user = str(ctx.user.id)
+        server = str(ctx.guild_id)
+        token = jira_tokens.get(user)
+        site = jira_sites.get(server)
 
-        tokenExists = (userId in jira_tokens)
-        if tokenExists == False:
+        if token is None:
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.red(),
                 title='Authentication Error',
                 description=f'User {ctx.user.name} is not authenticated with Jira.')
             )
-            return
-
-        jiraInfo = jira_tokens[userId]
-        jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
-
-        # TODO: Move to utils
-        def divide_chunks(l, n):
-            for i in range(0, len(l), n):
-                yield l[i:i + n]
-
-        if issue_id == '' and user_id == '':
-            # projects = jira.projects()
-            # for project in projects:
-            # embed.add_field(name=project.name, value=project.id, inline=False)
+        elif site is None:
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
-                title='Usage',
-                description='/jira-assign <TICKET_ID> <USER_ID>')
+                title='Instance Not Set',
+                description=f'No Jira instance has been associated with this server yet. Use /jira-set-instance to set'
+                            f' one up.')
             )
-
-        # TODO: Move to get-issues command
-        # User but no ticket
-        # elif len(parts) == 2 and parts[1].isdigit():
-        #     project_name = parts[1]
-        #     issues = []
-        #     i = 0
-        #     chunk_size = 500
-        #     while True:
-        #         chunk = jira.search_issues(f'project = {project_name}', startAt=i, maxResults=chunk_size)
-        #         i += chunk_size
-        #         issues += chunk.iterable
-        #         if i >= chunk.total:
-        #             break
-        #
-        #     embed = discord.Embed(color=discord.Color.yellow(), title="Available tickets: ")
-        #     for issue in issues:
-        #         if issue.fields.status.name != 'Done':
-        #             embed.add_field(name=issue, value=issue.fields.status, inline=False)
-        #
-        #     await ctx.respond(embed=embed)
-
-        # Ticket but not user
-        elif user_id == '':
-            project_name = issue_id.split('-')[0]
-
-            users = jira.search_assignable_users_for_projects('', project_name, maxResults=500)
-            user_chunks = list(divide_chunks(users, 12))
-
-            embeds = []
-            pages = []
-            for i in range(0, len(user_chunks)):
-                embeds.append(discord.Embed(color=discord.Color.yellow(), title='Assignable Users'))
-                for user in user_chunks[i]:
-                    embeds[i].add_field(name=user.displayName, value=user.accountId, inline=False)
-                pages.append(Page(
-                    content=f'Available assignees (Part {i + 1}):',
-                    embeds=[embeds[i]])
-                )
-            paginator = Paginator(pages=pages)
-            await paginator.respond(ctx.interaction, ephemeral=True)
-
+        elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error: Expired Token',
+                description=f'It looks like {ctx.user.name}\'s OAuth token has expired. Use /jira-auth to get'
+                            f' a new token.')
+            )
         else:
-            project_name = issue_id.split('-')[0]
-            users_dict = {}
-            # TODO: Deal with max results
-            users = jira.search_assignable_users_for_projects('', project_name, maxResults=200)
+            if issue_id == '' and user_id == '':
+                # projects = jira.projects()
+                # for project in projects:
+                # embed.add_field(name=project.name, value=project.id, inline=False)
+                await ctx.respond(embed=discord.Embed(
+                    color=discord.Color.yellow(),
+                    title='Usage',
+                    description='/jira-assign <TICKET_ID> <USER_ID>')
+                )
+            # TODO: Move to get-issues command
+            # User but no ticket
+            # elif len(parts) == 2 and parts[1].isdigit():
+            #     project_name = parts[1]
+            #     issues = []
+            #     i = 0
+            #     chunk_size = 500
+            #     while True:
+            #         chunk = jira.search_issues(f'project = {project_name}', startAt=i, maxResults=chunk_size)
+            #         i += chunk_size
+            #         issues += chunk.iterable
+            #         if i >= chunk.total:
+            #             break
+            #
+            #     embed = discord.Embed(color=discord.Color.yellow(), title="Available tickets: ")
+            #     for issue in issues:
+            #         if issue.fields.status.name != 'Done':
+            #             embed.add_field(name=issue, value=issue.fields.status, inline=False)
+            #
+            #     await ctx.respond(embed=embed)
 
-            for user in users:
-                users_dict[user.accountId] = user.displayName
+            # Ticket but not user
+            elif user_id == '':
+                # TODO: Move to utils
+                def divide_chunks(l, n):
+                    for i in range(0, len(l), n):
+                        yield l[i:i + n]
 
-            if user_id.isnumeric():  # account ID
-                user_name = users_dict.get(user_id)
-            else:  # Given name
-                user_name = user_id
+                project_name = issue_id.split('-')[0]
+                options = {
+                    'server': f'{JIRA_API_URL}/{site[1]}',
+                    'headers': {
+                        'Authorization': f'Bearer {token[0]}'
+                    }
+                }
+                jira = JIRA(options=options)
+                users = jira.search_assignable_users_for_projects('', project_name, maxResults=500)
+                user_chunks = list(divide_chunks(users, 12))
 
-            issue = jira.issue(issue_id)
-            if issue.fields.assignee is not None:
-                await ctx.respond(f'{issue_id} is already assigned to {issue.fields.assignee}. Reassign to {user_name}?')
-                response = await ctx.bot.wait_for('message', timeout=20.0)
-                if response.content in ['yes', 'Yes', 'y', 'Y']:
+                embeds = []
+                pages = []
+                for i in range(0, len(user_chunks)):
+                    embeds.append(discord.Embed(color=discord.Color.yellow(), title='Assignable Users'))
+                    for user in user_chunks[i]:
+                        embeds[i].add_field(name=user.displayName, value=user.accountId, inline=False)
+                    pages.append(Page(
+                        content=f'Available assignees (Part {i + 1}):',
+                        embeds=[embeds[i]])
+                    )
+                paginator = Paginator(pages=pages)
+                await paginator.respond(ctx.interaction, ephemeral=False)
+            else:
+                options = {
+                    'server': f'{JIRA_API_URL}/{site[1]}',
+                    'headers': {
+                        'Authorization': f'Bearer {token[0]}'
+                    }
+                }
+                jira = JIRA(options=options)
+                project_name = issue_id.split('-')[0]
+                users_dict = {}
+                # TODO: Deal with max results
+                users = jira.search_assignable_users_for_projects('', project_name, maxResults=200)
+
+                for user in users:
+                    users_dict[user.accountId] = user.displayName
+
+                if user_id[0].isnumeric():  # account ID
+                    user_name = users_dict.get(user_id)
+                else:  # Given name
+                    user_name = user_id
+
+                issue = jira.issue(issue_id)
+                if issue.fields.assignee is not None:
+                    await ctx.respond(
+                        f'{issue_id} is already assigned to {issue.fields.assignee}. Reassign to {user_name}?')
+                    response = await ctx.bot.wait_for('message', timeout=20.0)
+                    if response.content in ['yes', 'Yes', 'y', 'Y']:
+                        #TODO: Switch to some other kind of error checking?
+                        try:
+                            jira.assign_issue(issue_id, user_name)
+                            await ctx.respond(embed=discord.Embed(
+                                color=discord.Color.green(),
+                                title='Success',
+                                description=f'Successfully reassigned {issue_id} to {user_name}.')
+                            )
+                        except JIRAError:
+                            await ctx.respond(embed=discord.Embed(
+                                title='User Error',
+                                color=discord.Color.red(),
+                                description=f'User {user_name} not found.')
+                            )
+                    else:
+                        await ctx.send(f'{issue_id} will not be reassigned to {user_name}.')
+                else:
                     try:
                         jira.assign_issue(issue_id, user_name)
                         await ctx.respond(embed=discord.Embed(
@@ -328,24 +487,9 @@ class JiraCog(commands.Cog):
                             color=discord.Color.red(),
                             description=f'User {user_name} not found.')
                         )
-                else:
-                    await ctx.send(f'{issue_id} will not be reassigned to {user_name}.')
-            else:
-                try:
-                    jira.assign_issue(issue_id, user_name)
-                    await ctx.respond(embed=discord.Embed(
-                        color=discord.Color.green(),
-                        title='Success',
-                        description=f'Successfully reassigned {issue_id} to {user_name}.')
-                    )
-                except JIRAError:
-                    await ctx.respond(embed=discord.Embed(
-                        title='User Error',
-                        color=discord.Color.red(),
-                        description=f'User {user_name} not found.')
-                    )
 
     @commands.slash_command(name='jira-unassign', description='Unassign a Jira issue.')
+    @guild_only()
     async def jira_unassign_issue(self, ctx: discord.ApplicationContext, issue_id=''):
         """
         Unassign a user from a Jira issue that has already been assigned to someone.
@@ -353,43 +497,203 @@ class JiraCog(commands.Cog):
         Requires an issue ID and username to work.
         :return:
         """
-        userId = ctx.user.id
+        user_id = str(ctx.user.id)
+        server = str(ctx.guild_id)
+        token = jira_tokens.get(user_id)
+        site = jira_sites.get(server)
 
-        if issue_id == '':
+        if token is None:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.user.name} is not authenticated with Jira.')
+            )
+        elif site is None:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Instance Not Set',
+                description=f'No Jira instance has been associated with this server yet. Use /jira-set-instance to set'
+                            f' one up.')
+            )
+        elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error: Expired Token',
+                description=f'It looks like {ctx.user.name}\'s OAuth token has expired. Use /jira-auth to get'
+                            f' a new token.')
+            )
+        else:
+            if issue_id == '':
+                await ctx.respond(embed=discord.Embed(
+                    color=discord.Color.yellow(),
+                    title='Usage',
+                    description='/jira-unassign <ISSUE_ID>')
+                )
+            else:
+                options = {
+                    'server': f'{JIRA_API_URL}/{site[1]}',
+                    'headers': {
+                        'Authorization': f'Bearer {token[0]}'
+                    }
+                }
+                jira = JIRA(options=options)
+                jira.assign_issue(issue_id, None)
+                await ctx.respond(embed=discord.Embed(
+                    color=discord.Color.green(),
+                    title='Success',
+                    description=f'{issue_id} has been unassigned.')
+                )
+
+    @commands.slash_command(name='jira-auth',
+                            description='Authenticate with the CollabyBot OAuth app to use Jira commands'
+                                        'that access the Jira API.')
+    @guild_only()
+    async def jira_auth(self, ctx: discord.ApplicationContext):
+        user_id = str(ctx.author.id)
+        token = jira_tokens.get(user_id)
+        if token is not None and datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") > datetime.now():
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='User Already Authenticated',
+                description=f'User {ctx.user.name} is already authenticated with Jira.')
+            )
+        else:
+            user = ctx.author
+            self.auth_queue_users.put(user_id)
+
+            await user.send('Click here to authorize CollabyBot to access the Jira API.',
+                            view=AuthButton())
+            await ctx.respond('Follow the link in your DMs to authorize CollabyBot on Jira.')
+
+    async def jira_add_token(self, token: str, expires: datetime):
+        user_id = self.auth_queue_users.get()
+        jira_tokens[user_id] = (token, expires)
+        user = await self.bot.fetch_user(int(user_id))
+        await user.send('Authentication complete.')
+
+    @commands.slash_command(name='jira-set-instance', description='Associate your Jira instance with this server '
+                                                                   'to access your project using Jira commands.')
+    @guild_only()
+    async def jira_set_instance(self, ctx: discord.ApplicationContext, instance=''):
+        user_id = str(ctx.user.id)
+        server = str(ctx.guild_id)
+        token = jira_tokens.get(user_id)
+
+        if instance == '':
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 title='Usage',
-                description='/jira-unassign <ISSUE_ID>')
+                description='/jira-set-instance <INSTANCE_NAME>')
             )
-            return
-        else:
-            tokenExists = (userId in jira_tokens)
-            if tokenExists == False:
-                await ctx.respond(embed=discord.Embed(
-                    color=discord.Color.red(),
-                    title='Authentication Error',
-                    description=f'User {ctx.user.name} is not authenticated with Jira.')
-                )
-                return
-
-            jiraInfo = jira_tokens[userId]
-            jira = JIRA(jiraInfo["url"], basic_auth=(jiraInfo["email"], jiraInfo["token"]))
-
-            jira.assign_issue(issue_id, None)
+        elif token is None:
             await ctx.respond(embed=discord.Embed(
-                color=discord.Color.green(),
-                title='Success',
-                description=f'{issue_id} has been unassigned.')
+                color=discord.Color.red(),
+                title='Authentication Error',
+                description=f'User {ctx.user.name} is not authenticated with Jira.')
+            )
+        elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.red(),
+                title='Authentication Error: Expired Token',
+                description=f'It looks like {ctx.user.name}\'s OAuth token has expired. Use /jira-auth to get'
+                            f' a new token.')
+            )
+        else:
+            # Instance already exists
+            if jira_sites.get(server) is not None:
+                await ctx.send(f'This server is already linked to the {jira_sites.get(server)[0]} instance. '
+                               f'Replace it with {instance}? (Yes/no)')
+                response = await ctx.bot.wait_for('message', timeout=20.0)
+                if response.content in ['y', 'Y', 'yes', 'Yes']:
+                    r = requests.get(JIRA_RESOURCES_ENDPOINT,
+                                     headers={'Authorization': f'Bearer {token[0]}',
+                                              'Accept': 'application/json'})
+                    for site in r.json():
+                        if site['name'] == instance:
+                            jira_sites[server] = (site['name'], site['id'])
+                            await ctx.respond(embed=discord.Embed(
+                                color=discord.Color.green(),
+                                title='Success',
+                                description=f'You can now use Jira commands to access projects in {instance}!')
+                            )
+                            break
+                    # Instance was not found in response
+                    if jira_sites.get(server) is None:
+                        await ctx.respond(embed=discord.Embed(
+                            color=discord.Color.red(),
+                            title='Instance Not Found Error',
+                            description=f'Could not find Jira instance named {instance} within {ctx.user.name}\'s scope.')
+                        )
+                else:
+                    await ctx.send(f'The instance will not be changed to {instance}.')
+            else:
+                r = requests.get(JIRA_RESOURCES_ENDPOINT,
+                                 headers={'Authorization': f'Bearer {token[0]}',
+                                          'Accept': 'application/json'})
+                for site in r.json():
+                    if site['name'] == instance:
+                        jira_sites[server] = (site['name'], site['id'])
+                        await ctx.respond(embed=discord.Embed(
+                            color=discord.Color.green(),
+                            title='Success',
+                            description=f'You can now use Jira commands to access projects in {instance}!')
+                        )
+                        break
+                # Instance was not found in response
+                if jira_sites.get(server) is None:
+                    await ctx.respond(embed=discord.Embed(
+                        color=discord.Color.red(),
+                        title='Instance Not Found Error',
+                        description=f'Could not find Jira instance named {instance} within {ctx.user.name}\'s scope.')
+                    )
+
+    @commands.slash_command(name='jira-get-instance', description='Get the name of the Jira instance currently'
+                                                                  ' associated with this server.')
+    @guild_only()
+    async def jira_get_instance(self, ctx: discord.ApplicationContext):
+        server = str(ctx.guild_id)
+        site = jira_sites.get(server)
+        if site is None:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Instance Not Set',
+                description=f'No Jira instance has been associated with this server yet. Use /jira-set-instance to set'
+                            f' one up.')
+            )
+        else:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.blurple(),
+                title='Current Jira Instance',
+                description=f'{site[0]}')
             )
 
-    @commands.slash_command(name='jira-auth', description='Authenticate with the CollabyBot OAuth app to use Jira commands'
-                                                          'that access the Jira API.')
-    async def jira_auth(self, ctx: discord.ApplicationContext):
-        user_id = str(ctx.author.id)
-        user = ctx.author
-        await user.send('Click here to authorize CollabyBot to access the Jira API.',
-                        view=AuthButton(user_id))
-        await ctx.respond('Follow the link in your DMs to authorize CollabyBot on Jira.')
+    @commands.slash_command(name='jira-remove-instance', description='Remove the Jira instance currently associated '
+                                                                     'with this server.')
+    @guild_only()
+    async def jira_remove_instance(self, ctx: discord.ApplicationContext):
+        server = str(ctx.guild_id)
+        site = jira_sites.get(server)
+        if site is None:
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.yellow(),
+                title='Instance Not Set',
+                description=f'No Jira instance has been associated with this server yet. Use /jira-set-instance to set'
+                            f' one up.')
+            )
+        else:
+            await ctx.respond(f'Are you sure you want to remove {site[0]} from this server? It can be added back at any'
+                           f' time using /jira-set-instance. (Yes/no)')
+            response = await ctx.bot.wait_for('message', timeout=20.0)
+            if response.content in ['y', 'Y', 'yes', 'Yes']:
+                site = jira_sites.pop(server)
+                await ctx.send(embed=discord.Embed(
+                    color=discord.Color.green(),
+                    title='Success',
+                    description=f'{site[0]} is no longer associated with this server.')
+                )
+            else:
+                await ctx.respond(
+                    f'{site[0]} will not be removed from this server.')
 
 
 def setup(bot):
@@ -397,9 +701,9 @@ def setup(bot):
 
 
 class AuthButton(discord.ui.View):
-    def __init__(self, user_id: int):
+    def __init__(self):
         super().__init__()
         button = discord.ui.Button(label="Authorize",
                                    style=discord.ButtonStyle.link,
-                                   url=f'https://9a28-104-254-90-195.ngrok.io/auth/jira/user_id={user_id}')
+                                   url=f'https://9a28-104-254-90-195.ngrok.io/auth/jira')
         self.add_item(button)
