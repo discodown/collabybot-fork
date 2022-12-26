@@ -32,6 +32,9 @@ queue_lock = asyncio.Lock()
 
 
 class JiraCog(commands.Cog):
+    jira = discord.SlashCommandGroup('jira', 'Commands related to Jira.')
+    instance_commands = jira.create_subgroup('instance', 'Add/remove a Jira instance from the server.')
+    issue = jira.create_subgroup('issue', 'Commands related to Jira issues.')
 
     def __init__(self, bot):
         self.bot = bot
@@ -169,8 +172,7 @@ class JiraCog(commands.Cog):
         # Return the filename
         return filename
 
-    @commands.slash_command(name='jira-issue',
-                            description='Get summary, description, issue type, and assignee of a Jira issue.')
+    @issue.command(name='get', description='Get summary, description, issue type, and assignee of a Jira issue.')
     @guild_only()
     async def jira_get_issue(self, ctx: discord.ApplicationContext, issue_id=''):
         """
@@ -188,12 +190,12 @@ class JiraCog(commands.Cog):
         token = jira_tokens.get(user_id)
         site = jira_sites.get(server)
         if issue_id == '':
-            await ctx.respond(embed=UsageMessage('/jira-issue <ISSUE_ID>'))
+            await ctx.respond(embed=UsageMessage('/jira issue <ISSUE_ID>'))
         elif token is None:
             await ctx.respond(embed=JiraNotAuthenticatedError(ctx.user.name))
         elif site is None:
             await ctx.respond(embed=HelpEmbed('No Instance Set', f'No Jira instance has been associated with this '
-                                                                 f'server yet. Use /jira-set-instance to set one up.'))
+                                                                 f'server yet. Use **/jira instance set** to set one up.'))
         # Expired token
         elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
             await ctx.respond(embed=JiraExpiredTokenError(ctx.user.name))
@@ -217,7 +219,7 @@ class JiraCog(commands.Cog):
             embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
             await ctx.respond(embed=embed)
 
-    @commands.slash_command(name='jira-sprint', description='Get summary of a project\'s active sprint.')
+    @jira.command(name='sprint', description='Get summary of a project\'s active sprint.')
     @guild_only()
     async def jira_get_sprint(self, ctx: discord.ApplicationContext, project_id=''):
         """
@@ -238,13 +240,13 @@ class JiraCog(commands.Cog):
             await ctx.respond(embed=JiraNotAuthenticatedError(ctx.user.name))
         elif site is None:
             await ctx.respond(embed=HelpEmbed('No Instance Found', f'No Jira instance has been associated with this'
-                                                                   f'server yet. Use /jira-set-instance to set one up.'))
+                                                                   f'server yet. Use **/jira instance set** to set one up.'))
         # Expired token
         elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
             await ctx.respond(embed=JiraExpiredTokenError(ctx.user.name))
         # No args
         elif project_id == '':
-            await ctx.respond(embed=UsageMessage('/sprint <PROJECT_ID>'))
+            await ctx.respond(embed=UsageMessage('/jira sprint <PROJECT_ID>'))
             options = {
                 'server': f'{JIRA_API_URL}/{site[1]}',
                 'headers': {
@@ -304,7 +306,7 @@ class JiraCog(commands.Cog):
                 await ctx.respond('**Burndown Chart:**', file=picture)
             remove(burndown_chart)  # Delete chart after sending it
 
-    @commands.slash_command(name='jira-assign', description='Assign a Jira issue to a user.')
+    @issue.command(name='assign', description='Assign a Jira issue to a user.')
     @guild_only()
     async def jira_assign_issue(self, ctx: discord.ApplicationContext, issue_id='', user_id=''):
         """
@@ -324,12 +326,12 @@ class JiraCog(commands.Cog):
             await ctx.respond(embed=JiraNotAuthenticatedError(ctx.user.name))
         elif site is None:
             await ctx.respond(embed=HelpEmbed('Instance Not Set', 'No Jira instance has been associated with this '
-                                                                  'server yet. Use /jira-set-instance to set one up.'))
+                                                                  'server yet. Use **/jira instance set** to set one up.'))
         elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
             await ctx.respond(embed=JiraExpiredTokenError(ctx.user.name))
         else:
             if issue_id == '' and user_id == '':
-                await ctx.respond(embed=UsageMessage('/jira-assign <TICKET_ID> <USER_ID>'))
+                await ctx.respond(embed=UsageMessage('/jira assign <TICKET_ID> <USER_ID>'))
             # TODO: Move to get-issues command
             # User but no ticket
             # elif len(parts) == 2 and parts[1].isdigit():
@@ -423,7 +425,7 @@ class JiraCog(commands.Cog):
                     except JIRAError:
                         await ctx.respond(embed=JiraUserError(user_name))
 
-    @commands.slash_command(name='jira-unassign', description='Unassign a Jira issue.')
+    @issue.command(name='unassign', description='Unassign a Jira issue.')
     @guild_only()
     async def jira_unassign_issue(self, ctx: discord.ApplicationContext, issue_id=''):
         """
@@ -442,12 +444,12 @@ class JiraCog(commands.Cog):
         elif site is None:
             await ctx.respond(embed=HelpEmbed('Instance Not Set',
                                               f'No Jira instance has been associated with this server yet. Use '
-                                              f'/jira-set-instance to set one up.'))
+                                              f'**/jira instance set** to set one up.'))
         elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
             await ctx.respond(embed=JiraExpiredTokenError(ctx.user.name))
         else:
             if issue_id == '':
-                await ctx.respond(embed=UsageMessage('/jira-unassign <ISSUE_ID>'))
+                await ctx.respond(embed=UsageMessage('/jira unassign <ISSUE_ID>'))
             else:
                 options = {
                     'server': f'{JIRA_API_URL}/{site[1]}',
@@ -463,9 +465,8 @@ class JiraCog(commands.Cog):
                     description=f'{issue_id} has been unassigned.')
                 )
 
-    @commands.slash_command(name='jira-auth',
-                            description='Authenticate with the CollabyBot OAuth app to use Jira commands'
-                                        'that access the Jira API.')
+    @jira.command(name='auth', description='Authenticate with the CollabyBot OAuth app to use Jira commands'
+                                           ' that access the Jira API.')
     @guild_only()
     async def jira_auth(self, ctx: discord.ApplicationContext):
         user_id = str(ctx.author.id)
@@ -489,7 +490,7 @@ class JiraCog(commands.Cog):
         user = await self.bot.fetch_user(int(user_id))
         await user.send('Authentication complete.')
 
-    @commands.slash_command(name='jira-set-instance', description='Associate your Jira instance with this server '
+    @instance_commands.command(name='set', description='Associate your Jira instance with this server '
                                                                   'to access your project using Jira commands.')
     @guild_only()
     async def jira_set_instance(self, ctx: discord.ApplicationContext, instance=''):
@@ -498,7 +499,7 @@ class JiraCog(commands.Cog):
         token = jira_tokens.get(user_id)
 
         if instance == '':
-            await ctx.respond(embed=UsageMessage('/jira-set-instance <INSTANCE_NAME>'))
+            await ctx.respond(embed=UsageMessage('/jira instance set <INSTANCE_NAME>'))
         elif token is None:
             await ctx.respond(embed=JiraNotAuthenticatedError(ctx.user.name))
         elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
@@ -540,15 +541,15 @@ class JiraCog(commands.Cog):
                 if jira_sites.get(server) is None:
                     await ctx.respond(embed=JiraInstanceNotFoundError(instance, ctx.user.name))
 
-    @commands.slash_command(name='jira-get-instance', description='Get the name of the Jira instance currently'
-                                                                  ' associated with this server.')
+    @instance_commands.command(name='get', description='Get the name of the Jira instance currently associated '
+                                                       'with this server.')
     @guild_only()
     async def jira_get_instance(self, ctx: discord.ApplicationContext):
         server = str(ctx.guild_id)
         site = jira_sites.get(server)
         if site is None:
-            await ctx.respond(embed=HelpEmbed('Instance Not Set', 'No Jira instance has been associated with this '
-                                                                  'server yet. Use /jira-set-instance to set one up.'))
+            await ctx.respond(embed=HelpEmbed('Instance Not Set',
+                                              'No Jira instance has been associated with this server yet. Use **/jira instance set** to set one up.'))
         else:
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.blurple(),
@@ -556,7 +557,7 @@ class JiraCog(commands.Cog):
                 description=f'{site[0]}')
             )
 
-    @commands.slash_command(name='jira-remove-instance', description='Remove the Jira instance currently associated '
+    @instance_commands.command(name='remove', description='Remove the Jira instance currently associated '
                                                                      'with this server.')
     @guild_only()
     async def jira_remove_instance(self, ctx: discord.ApplicationContext):
@@ -564,10 +565,10 @@ class JiraCog(commands.Cog):
         site = jira_sites.get(server)
         if site is None:
             await ctx.respond(embed=HelpEmbed('Instance Not Set', 'No Jira instance has been associated with this '
-                                                                  'server yet. Use /jira-set-instance to set one up.'))
+                                                                  'server yet. Use **/jira instance set** to set one up.'))
         else:
             await ctx.respond(f'Are you sure you want to remove {site[0]} from this server? It can be added back at any'
-                              f' time using /jira-set-instance. (Yes/no)')
+                              f' time using **/jira instance set**. (Yes/no)')
             response = await ctx.bot.wait_for('message', timeout=20.0)
             if response.content in ['y', 'Y', 'yes', 'Yes']:
                 site = jira_sites.pop(server)

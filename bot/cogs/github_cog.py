@@ -37,12 +37,12 @@ class GitHubCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    issues = discord.SlashCommandGroup(name='gh-issues',
-                                       description='Subscribe/unsubscribe to GitHub issue notifications.')
-    pull_requests = discord.SlashCommandGroup(name='gh-pull-requests',
-                                              description='Subscribe/unsubscribe to GitHub pull request notifications.')
-    commits = discord.SlashCommandGroup(name='gh-commits',
-                                        description='Subscribe/unsubscribe to GitHub commit notifications.')
+    github = discord.SlashCommandGroup('github', 'GitHub related commands.')
+    issues = github.create_subgroup('issues', 'Subscribe/unsubscribe to GitHub issue notifications.')
+    pull_requests = github.create_subgroup('pull-requests',
+                                           'Subscribe/unsubscribe to GitHub pull request notifications.')
+    commits = github.create_subgroup('commits', 'Subscribe/unsubscribe to GitHub commit notifications.')
+    repositories = github.create_subgroup('repo', 'Add/remove GitHub repos.')
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: Guild):
@@ -151,11 +151,11 @@ class GitHubCog(commands.Cog):
         channel = str(ctx.channel.id)
         server = str(ctx.guild_id)
         if repo == '':
-            await ctx.respond(embed=UsageMessage('/gh-pull-requests <REPO_NAME>'))
+            await ctx.respond(embed=UsageMessage('/github pull-requests subscribe <REPO_NAME>'))
             if not repos.get(server):
                 await ctx.respond(embed=HelpEmbed('No Repositories Added',
                                                   'You haven\'t added any repositories to CollabyBot yet. '
-                                                  'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add one.'))
+                                                  'Use /github repo add <REPO_OWNER>/<REPO_NAME> to add one.'))
             else:
                 repo_list = ''
                 for r in repos[server].keys():
@@ -168,7 +168,7 @@ class GitHubCog(commands.Cog):
             await ctx.respond(embed=discord.Embed(
                 color=discord.Color.yellow(),
                 description=f'Repository {repo} hasn\'t been added to CollabyBot yet. '
-                            f'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add it.')
+                            f'Use /github repo add <REPO_OWNER>/<REPO_NAME> to add it.')
             )
         elif channel not in pr_subscribers[repo]:
             pr_subscribers[repo].append(channel)
@@ -177,7 +177,7 @@ class GitHubCog(commands.Cog):
             await ctx.respond(embed=HelpEmbed('Channel Already Subsribed',
                                               f'#{ctx.channel.name} is already subscribed to to pull requests '
                                               f'for {repo}.')
-            )
+                              )
 
     @issues.command(name="subscribe", description="Subscribe to issue notifications in this channel.")
     @guild_only()
@@ -196,11 +196,11 @@ class GitHubCog(commands.Cog):
         server = str(ctx.guild_id)
 
         if repo == '':
-            await ctx.respond(embed=UsageMessage('/gh-issues <REPO_NAME>'))
+            await ctx.respond(embed=UsageMessage('/github issues subscribe <REPO_NAME>'))
             if not repos.get(server):  # no repos added yet
                 await ctx.respond(embed=HelpEmbed('No Repositories Added',
                                                   'You haven\'t added any repositories to CollabyBot yet. '
-                                                  'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add one.'))
+                                                  'Use /github repo add <REPO_OWNER>/<REPO_NAME> to add one.'))
             else:
                 repo_list = ''
                 for r in repos[server].keys():
@@ -212,7 +212,7 @@ class GitHubCog(commands.Cog):
         elif repo not in repos[server].keys():  # repo hasn't been added yet
             await ctx.respond(embed=HelpEmbed('Repo Not Added',
                                               f'Repository {repo} hasn\'t been added to CollabyBot yet. '
-                                              f'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add it.'))
+                                              f'Use /github repo add <REPO_OWNER>/<REPO_NAME> to add it.'))
         elif channel not in issue_subscribers[repo]:  # channel isn't subscribed
             issue_subscribers[repo].append(channel)
             await ctx.respond(embed=IssueSubscriptionSuccess(ctx.channel.name, repo))
@@ -221,8 +221,8 @@ class GitHubCog(commands.Cog):
             await ctx.respond(embed=HelpEmbed('Channel Already Subscribed', f'#{ctx.channel.name} is already subscribed'
                                                                             f' to to issues for {repo}.'))
 
-    @commands.slash_command(name='gh-add-repo',
-                            description='Add a repo to the list of repositories you want notifications from.')
+    @repositories.command(name='add',
+                          description='Add a repo to the list of repositories you want notifications from.')
     @guild_only()
     async def add_repo(self, ctx: discord.ApplicationContext, repo_name=''):
         """
@@ -239,7 +239,7 @@ class GitHubCog(commands.Cog):
 
         server = str(ctx.guild_id)
         if repo_name == '':
-            await ctx.respond(embed=UsageMessage(f'/gh-add <REPO_OWNER>/<REPO_NAME>'))
+            await ctx.respond(embed=UsageMessage(f'/github repo add <REPO_OWNER>/<REPO_NAME>'))
         else:
             token = gh_tokens.get(str(ctx.author.id))
             if token is None:
@@ -303,7 +303,7 @@ class GitHubCog(commands.Cog):
                         elif ex.status == 404:
                             await ctx.respond(embed=GitHub404Error(repo.full_name))
 
-    @commands.slash_command(name='gh-get-repos', description='See the list of repos added to CollabyBot.')
+    @github.command(name='repos', description='See the list of repos added to CollabyBot.')
     @guild_only()
     async def get_repos(self, ctx: discord.ApplicationContext):
         """
@@ -317,7 +317,7 @@ class GitHubCog(commands.Cog):
         if not repos.get(server):
             await ctx.respond(embed=HelpEmbed('No Repositories Added',
                                               'You haven\'t added any repositories to CollabyBot yet. '
-                                              'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add one.'))
+                                              'Use **/github repo add <REPO_OWNER>/<REPO_NAME>** to add one.'))
         else:
             repo_list = ''
             for r in repos[server].keys():
@@ -347,11 +347,11 @@ class GitHubCog(commands.Cog):
         server = str(ctx.guild_id)
 
         if repo == '':
-            await ctx.respond(embed=UsageMessage('/gh-commits <REPO_NAME> [BRANCH_NAME]'))
+            await ctx.respond(embed=UsageMessage('/github commits subscribe <REPO_NAME> [BRANCH_NAME]'))
             if not repos.get(server):
                 await ctx.respond(embed=HelpEmbed('No Repositories Added',
                                                   'You haven\'t added any repositories to CollabyBot yet. '
-                                                  'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add one.'))
+                                                  'Use **/github repo add <REPO_OWNER>/<REPO_NAME>** to add one.'))
             else:
                 repo_list = ''
                 for r in repos[server].keys():
@@ -362,7 +362,7 @@ class GitHubCog(commands.Cog):
         elif repo not in repos[server].keys():
             await ctx.respond(embed=HelpEmbed('Repo Not Added',
                                               f'Repository {repo} hasn\'t been added to CollabyBot yet. '
-                                              f'Use /gh-add <REPO_OWNER>/<REPO_NAME> to add it.'))
+                                              f'Use **/github repo add <REPO_OWNER>/<REPO_NAME>** to add it.'))
         else:
             if branch == '':
                 for b in repos[server].get(repo):
@@ -382,7 +382,7 @@ class GitHubCog(commands.Cog):
                                                       f'#{ctx.channel.name} is already subscribed to commits for '
                                                       f'{repo} on {branch}.'))
 
-    @commands.slash_command(name='gh-open-pull-requests', description='Show open pull requests in testing repo.')
+    @github.command(name='open-pull-requests', description='Show open pull requests in testing repo.')
     @guild_only()
     async def open_pull_requests(self, ctx: discord.ApplicationContext, repo=''):
         """
@@ -396,7 +396,7 @@ class GitHubCog(commands.Cog):
         """
 
         if repo == '':
-            await ctx.respond(embed=UsageMessage('/gh-open-pull-requests <REPO_OWNER>/<REPO_NAME>') )
+            await ctx.respond(embed=UsageMessage('/github open-pull-requests <REPO_OWNER>/<REPO_NAME>'))
         else:
             openpr_embed = discord.Embed(color=discord.Color.blurple(), title=f'Open pull requests in {repo}:\n')
             # get repo via pygithub
@@ -408,9 +408,8 @@ class GitHubCog(commands.Cog):
                 openpr_embed.add_field(name=f'{pr.title}:', value=f'{pr.url}', inline=False)
             await ctx.respond(embed=openpr_embed)
 
-    @commands.slash_command(name='gh-auth',
-                            description='Authenticate with the CollabyBot OAuth app for full access to GitHub '
-                                        'repositories.')
+    @github.command(name='auth', description='Authenticate with the CollabyBot OAuth app for full access to GitHub '
+                                             'repositories.')
     @guild_only()
     async def gh_auth(self, ctx: discord.ApplicationContext):
         user_id = str(ctx.author.id)

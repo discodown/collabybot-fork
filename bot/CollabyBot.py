@@ -1,5 +1,5 @@
 import discord
-from discord import Guild
+from discord import Guild, ApplicationCommand
 from discord.ext import commands
 from discord.ext.commands import Bot, guild_only, errors
 from discord.ext.commands.errors import CommandInvokeError
@@ -132,10 +132,12 @@ class DiscordCollabyBot(Bot):
         pages = []
         general_embed.add_field(name='/ping:', value='Responds with pong.', inline=False)
         general_embed.add_field(name='/commands:', value='List all supported commands.', inline=False)
-        for command in ctx.bot.get_cog('GitHubCog').get_commands():
-            github_embed.add_field(name=f'/{command.name}:', value=f'{command.description}', inline=False)
-        for command in ctx.bot.get_cog('JiraCog').get_commands():
-            jira_embed.add_field(name=f'/{command.name}:', value=f'{command.description}', inline=False)
+        for command in ctx.bot.get_cog('GitHubCog').walk_commands():
+            if not isinstance(command, discord.ext.commands.Group):
+                github_embed.add_field(name=f'/{command.qualified_name}:', value=f'{command.description}', inline=False)
+        for command in ctx.bot.get_cog('JiraCog').walk_commands():
+            if not isinstance(command, discord.ext.commands.Group):
+                jira_embed.add_field(name=f'/{command.qualified_name}:', value=f'{command.description}', inline=False)
 
         pages.append(Page(
             content='Here\'s a list of commands you can use.',
