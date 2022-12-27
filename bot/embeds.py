@@ -57,6 +57,11 @@ class HelpEmbed(Embed):
         super().__init__(title=title, color=Color.yellow(), description=message)
 
 
+class SuccessEmbed(Embed):
+    def __int__(self, message: str):
+        super().__init__(color=Color.green(), title='Success', description=message)
+
+
 class CommitSubscriptionSuccess(Embed):
     def __init__(self, channel: str, repo: str, branch: str):
         super().__init__(color=Color.green(), title='Success',

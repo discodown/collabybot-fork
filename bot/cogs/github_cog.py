@@ -38,11 +38,15 @@ class GitHubCog(commands.Cog):
         self.bot = bot
 
     github = discord.SlashCommandGroup('github', 'GitHub related commands.')
-    issues = github.create_subgroup('issues', 'Subscribe/unsubscribe to GitHub issue notifications.')
-    pull_requests = github.create_subgroup('pull-requests',
-                                           'Subscribe/unsubscribe to GitHub pull request notifications.')
-    commits = github.create_subgroup('commits', 'Subscribe/unsubscribe to GitHub commit notifications.')
+    #issues = github.create_subgroup('issues', 'Subscribe/unsubscribe to GitHub issue notifications.')
+    #pull_requests = github.create_subgroup('pull-requests',
+                                          # 'Subscribe/unsubscribe to GitHub pull request notifications.')
+    #commits = github.create_subgroup('commits', 'Subscribe/unsubscribe to GitHub commit notifications.')
     repositories = github.create_subgroup('repo', 'Add/remove GitHub repos.')
+    subscribe = github.create_subgroup('subscribe', 'Subscribe channel to GitHub notifications.')
+    unsubscribe = github.create_subgroup('unsubscribe', 'Unsubscribe channel to GitHub notifications.')
+    fetch = github.create_subgroup('fetch', 'Fetch information about GitHub repositories.')
+
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: Guild):
@@ -135,7 +139,7 @@ class GitHubCog(commands.Cog):
             except TypeError:
                 print('No subscribers')
 
-    @pull_requests.command(name='subscribe', description='Subscribe to pull request notifications in this channel.')
+    @subscribe.command(name='pull-requests', description='Subscribe to pull request notifications in this channel.')
     @guild_only()
     async def pull_requests_sub(self, ctx: discord.ApplicationContext, repo=''):
         """
@@ -179,7 +183,7 @@ class GitHubCog(commands.Cog):
                                               f'for {repo}.')
                               )
 
-    @issues.command(name="subscribe", description="Subscribe to issue notifications in this channel.")
+    @subscribe.command(name="issues", description="Subscribe to issue notifications in this channel.")
     @guild_only()
     async def issues_sub(self, ctx: discord.ApplicationContext, repo=''):
         """
@@ -220,6 +224,42 @@ class GitHubCog(commands.Cog):
         else:  # channel is already subscribed
             await ctx.respond(embed=HelpEmbed('Channel Already Subscribed', f'#{ctx.channel.name} is already subscribed'
                                                                             f' to to issues for {repo}.'))
+
+    @unsubscribe.command(name='issues', description='Unsubscribe this channel from issue notifications.')
+    @guild_only()
+    async def issues_unsub(self, ctx: discord.ApplicationContext, repo_name=''):
+        if repo_name == '':
+            await ctx.respond(UsageMessage('/github unsubscribe issues <REPO_OWNER>/<REPO_NAME>'))
+        elif issue_subscribers.get(repo_name) is None:
+            await ctx.respond(HelpEmbed('Channel Not Subscribed', f'{ctx.channel.name} is not subscribed to issues for {repo_name}.'))
+        else:
+            r = issue_subscribers.pop(repo_name)
+            await ctx.respond(SuccessEmbed(f'{ctx.channel.name} has been unsubscribed from issues for {repo_name}.'))
+
+    @unsubscribe.command(name='pull-requests', description='Unsubscribe this channel from pull request notifications.')
+    @guild_only()
+    async def pull_requests_unsub(self, ctx: discord.ApplicationContext, repo_name=''):
+        if repo_name == '':
+            await ctx.respond(UsageMessage('/github unsubscribe pull-requests <REPO_OWNER>/<REPO_NAME>'))
+        elif pr_subscribers.get(repo_name) is None:
+            await ctx.respond(HelpEmbed('Channel Not Subscribed', f'{ctx.channel.name} is not subscribed to pull requests for {repo_name}.'))
+        else:
+            r = pr_subscribers.pop(repo_name)
+            await ctx.respond(SuccessEmbed(f'{ctx.channel.name} has been unsubscribed from pull requests for {repo_name}.'))
+
+    @unsubscribe.command(name='commits', description='Unsubscribe this channel from issue notifications.')
+    @guild_only()
+    async def commits_unsub(self, ctx: discord.ApplicationContext, repo_name=''):
+        if repo_name == '':
+            await ctx.respond(UsageMessage('/github unsubscribe commits <REPO_OWNER>/<REPO_NAME>'))
+        elif commit_subscribers.get(repo_name) is None:
+            await ctx.respond(HelpEmbed('Channel Not Subscribed',
+                                        f'{ctx.channel.name} is not subscribed to commits for {repo_name}.'))
+        else:
+            r = commit_subscribers.pop(repo_name)
+            await ctx.respond(
+                SuccessEmbed(f'{ctx.channel.name} has been unsubscribed from commits for {repo_name}.'))
+
 
     @repositories.command(name='add',
                           description='Add a repo to the list of repositories you want notifications from.')
@@ -303,6 +343,24 @@ class GitHubCog(commands.Cog):
                         elif ex.status == 404:
                             await ctx.respond(embed=GitHub404Error(repo.full_name))
 
+    @repositories.command(name='remove', description='Remove a repository from this server\'s list.')
+    @guild_only()
+    async def remove_repo(self, ctx: discord.ApplicationContext, repo=''):
+        if repo == '':
+            await ctx.respond(embed=UsageMessage('/github repo remove <REPO_OWNER>/<REPI_NAME>'))
+        elif repos.get(repo) is None:
+            await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
+        else:
+            r = repos.pop(repo)
+            if commit_subscribers.get(repo) is not None:
+                r = commit_subscribers.pop(repo)
+            if issue_subscribers.get(repo) is not None:
+                r = issue_subscribers.pop(repo)
+            if pr_subscribers.get(repo) is not None:
+                r = pr_subscribers.pop(repo)
+
+            await ctx.respond(embed=SuccessEmbed(f'{repo} has been removed.'))
+
     @github.command(name='repos', description='See the list of repos added to CollabyBot.')
     @guild_only()
     async def get_repos(self, ctx: discord.ApplicationContext):
@@ -327,7 +385,7 @@ class GitHubCog(commands.Cog):
                                        description=f'{repo_list}')
             await ctx.respond(embed=list_embed)
 
-    @commits.command(name='subscribe', description='Subscribe to commit notifications in this channel.')
+    @subscribe.command(name='commits', description='Subscribe to commit notifications in this channel.')
     @guild_only()
     async def commits_sub(self, ctx: discord.ApplicationContext, repo='', branch=''):
         """
