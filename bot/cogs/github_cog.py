@@ -531,7 +531,7 @@ class GitHubCog(commands.Cog):
 
     @issues.command(name='close', description='Close an issue.')
     @guild_only()
-    async def issue_close(self,  ctx: discord.ApplicationContext, repo='', issue_id='', comment=''):
+    async def issue_close(self,  ctx: discord.ApplicationContext, repo='', issue_id=''):
         user_id = str(ctx.user.id)
         token = gh_tokens.get(user_id)
         if token is None:
@@ -541,19 +541,32 @@ class GitHubCog(commands.Cog):
         elif repos.get(repo) is None:
             await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
         else:
+            g = Github(token)
+            r = g.get_repo(repo)
+            issue = r.get_issue(int(issue_id))
+            issue.edit(state='closed')
+
+            await ctx.respond(embed=SuccessEmbed(f'Issue {issue.title} in {repo} has been closed.'))
 
     @issues.command(name='assign', description='Assign an issue to a GitHub user.')
     @guild_only()
-    async def issue_assign(self,  ctx: discord.ApplicationContext, repo='', issue_id='', user=''):
+    async def issue_assign(self,  ctx: discord.ApplicationContext, repo='', issue_id='', assignees=''):
         user_id = str(ctx.user.id)
         token = gh_tokens.get(user_id)
         if token is None:
             await ctx.respond(GitHubNotAuthenticatedError(ctx.user.name))
-        elif repo == '' or issue_id == '' or user == '':
-            await ctx.respond(embed=UsageMessage('/github issue assign <REPO_OWNER>/<REPO_NAME> <ISSUE_ID> <USER_NAME>'))
+        elif repo == '' or issue_id == '' or assignees == '':
+            await ctx.respond(embed=UsageMessage('/github issue assign <REPO_OWNER>/<REPO_NAME> <ISSUE_ID> <ASSIGNEE(S)>'))
         elif repos.get(repo) is None:
             await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
         else:
+            g = Github(token)
+            r = g.get_repo(repo)
+            issue = r.get_issue(int(issue_id))
+            assignee_list = assignees.split(' ')
+            issue.edit(assignees=assignee_list)
+
+            await ctx.respond(f'Issue {issue.title} has been assigned to {assignee_list}.')
 
     @pull_requests.command(name='approve', description='Approve a pull request.')
     @guild_only()
@@ -567,6 +580,12 @@ class GitHubCog(commands.Cog):
         elif repos.get(repo) is None:
             await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
         else:
+            g = Github(token)
+            r = g.get_repo(repo)
+            pr = r.get_pull(int(pr_id))
+            pr.create_review(body=comment, event='APPROVE')
+
+            await ctx.respond(f'PR {pr.title} has been approved.')
 
     @github.command(name='auth', description='Authenticate with the CollabyBot OAuth app for full access to GitHub '
                                              'repositories.')
