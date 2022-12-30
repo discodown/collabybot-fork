@@ -12,7 +12,7 @@ import bot
 from bot.CollabyBot import DiscordCollabyBot
 
 nest_asyncio.apply()  # needed to prevent errors caused by nested async tasks
-load_dotenv()  # load env file
+# load_dotenv()  # load env file
 intents = discord.Intents().all()  # default to all intents for bot
 discordToken = os.getenv('DISCORD_BOT_TOKEN')  # get bot token
 discordBot = DiscordCollabyBot(intents=intents, command_prefix='/')  # create the bot instance

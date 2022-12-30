@@ -1,4 +1,5 @@
 import asyncio
+import os
 from queue import Queue
 import discord
 from discord import Guild, Member
@@ -10,7 +11,6 @@ from github.MainClass import Github
 from github.GithubException import UnknownObjectException, GithubException
 import json
 from bot.embeds import *
-from os import curdir
 
 # with open('bot/cogs/json_/repos.json') as f:
 #     repos = json.load(f)  # repo names and list of branches
@@ -34,7 +34,7 @@ commit_subscribers = {}
 issue_subscribers = {}
 repos = {}
 
-URL = 'https://c62b-72-78-191-96.ngrok.io'
+HOME_URL = os.getenv('HOME_URL')
 
 auth_queue = Queue(maxsize=1)
 queue_lock = asyncio.Lock()
@@ -187,7 +187,7 @@ class GitHubCog(commands.Cog):
             pr_subscribers[repo].append(channel)
             await ctx.respond(embed=PullRequestSubscriptionSuccess(ctx.channel.name, repo))
         else:
-            await ctx.respond(embed=HelpEmbed('Channel Already Subsribed',
+            await ctx.respond(embed=HelpEmbed('Channel Already Subscribed',
                                               f'#{ctx.channel.name} is already subscribed to to pull requests '
                                               f'for {repo}.')
                               )
@@ -313,21 +313,21 @@ class GitHubCog(commands.Cog):
                 else:
                     try:
                         repo.create_hook(name='web',
-                                         config={'url': f'{URL}/webhook/commits',
+                                         config={'url': f'{HOME_URL}/webhook/commits',
                                                  'content_type': 'json',
                                                  },
                                          events=['push'],
                                          active=True
                                          )
                         repo.create_hook(name='web',
-                                         config={'url': f'{URL}/webhook/issues',
+                                         config={'url': f'{HOME_URL}/webhook/issues',
                                                  'content_type': 'json',
                                                  },
                                          events=['issues'],
                                          active=True
                                          )
                         repo.create_hook(name='web',
-                                         config={'url': f'{URL}/webhook/pull-request',
+                                         config={'url': f'{HOME_URL}/webhook/pull-request',
                                                  'content_type': 'json',
                                                  },
                                          events=['pull_request'],
@@ -662,5 +662,5 @@ class AuthButton(discord.ui.View):
         super().__init__()
         button = discord.ui.Button(label="Authorize",
                                    style=discord.ButtonStyle.link,
-                                   url=f'https://c62b-72-78-191-96.ngrok.io/auth/github')
+                                   url=f'{HOME_URL}/auth/github')
         self.add_item(button)

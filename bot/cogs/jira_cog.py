@@ -18,6 +18,7 @@ from bot.embeds import JiraExpiredTokenError, JiraNotAuthenticatedError, JiraAut
 
 JIRA_RESOURCES_ENDPOINT = os.getenv('JIRA_RESOURCES_ENDPOINT')
 JIRA_API_URL = os.getenv('JIRA_API_URL')
+HOME_URL = os.getenv('HOME_URL')
 
 # with open('bot/cogs/json_/jira_tokens.json') as f:
 #     jira_tokens = json.load(f)  # channel ids of channels subscribed to issues
@@ -627,5 +628,5 @@ class AuthButton(discord.ui.View):
         super().__init__()
         button = discord.ui.Button(label="Authorize",
                                    style=discord.ButtonStyle.link,
-                                   url=f'https://c62b-72-78-191-96.ngrok.io/auth/jira')
+                                   url=f'{HOME_URL}/auth/jira')
         self.add_item(button)
