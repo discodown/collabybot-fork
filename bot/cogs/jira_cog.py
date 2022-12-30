@@ -15,7 +15,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from queue import Queue
 from bot.embeds import JiraExpiredTokenError, JiraNotAuthenticatedError, JiraAuthSuccess, HelpEmbed, UsageMessage, \
-    JiraUserError, IssueAssignSuccess, JiraInstanceNotFoundError
+    JiraUserError, IssueAssignSuccess, JiraInstanceNotFoundError, SuccessEmbed
 
 JIRA_RESOURCES_ENDPOINT = os.getenv('JIRA_RESOURCES_ENDPOINT')
 JIRA_API_URL = os.getenv('JIRA_API_URL')
@@ -218,6 +218,40 @@ class JiraCog(commands.Cog):
                 embed.add_field(name=f'Assignee:', value=issue.fields.assignee.displayName, inline=False)
             embed.add_field(name=f'Status:', value=issue.fields.status.name, inline=False)
             await ctx.respond(embed=embed)
+
+    # @issue.command(name='mark-done', description='Change the status of an issue to Done.')
+    # @guild_only()
+    # async def jira_issue_done(self, ctx: discord.ApplicationContext, issue_id=''):
+    #     user = str(ctx.user.id)
+    #     server = str(ctx.guild_id)
+    #     token = jira_tokens.get(user)
+    #     site = jira_sites.get(server)
+    #
+    #     if token is None:
+    #         await ctx.respond(embed=JiraNotAuthenticatedError(ctx.user.name))
+    #     elif site is None:
+    #         await ctx.respond(embed=HelpEmbed('Instance Not Set', 'No Jira instance has been associated with this '
+    #                                                               'server yet. Use **/jira instance set** to set one up.'))
+    #     elif datetime.strptime(token[1], "%Y-%m-%d %H:%M:%S") < datetime.now():
+    #         await ctx.respond(embed=JiraExpiredTokenError(ctx.user.name))
+    #     else:
+    #         if issue_id == '':
+    #             await ctx.respond(embed=UsageMessage('/jira issue mark-done <ISSUE_ID>'))
+    #         else:
+    #             options = {
+    #                 'server': f'{JIRA_API_URL}/{site[1]}',
+    #                 'headers': {
+    #                     'Authorization': f'Bearer {token[0]}'
+    #                 }
+    #             }
+    #             jira = JIRA(options=options)
+    #             issue = jira.issue(issue_id)
+    #             issue.update(fields={'Status': 'Done'})
+    #
+    #             await ctx.respond(embed=discord.Embed(
+    #                 color=discord.Color.green(),
+    #                 title='Success',
+    #                 description=f'{issue_id}\'s status has been changed to Done.'))
 
     @jira.command(name='sprint', description='Get summary of a project\'s active sprint.')
     @guild_only()
@@ -591,5 +625,5 @@ class AuthButton(discord.ui.View):
         super().__init__()
         button = discord.ui.Button(label="Authorize",
                                    style=discord.ButtonStyle.link,
-                                   url=f'https://9a28-104-254-90-195.ngrok.io/auth/jira')
+                                   url=f'https://c62b-72-78-191-96.ngrok.io/auth/jira')
         self.add_item(button)
