@@ -17,7 +17,7 @@ intents = discord.Intents().all()  # default to all intents for bot
 discordToken = os.getenv('DISCORD_BOT_TOKEN')  # get bot token
 discordBot = DiscordCollabyBot(intents=intents, command_prefix='/')  # create the bot instance
 DiscordCollabyBot.add_all_commands(discordBot)  # register all bot commands before running the bot
-PORT = os.getenv('PORT')
+PORT = os.getenv('PORT') or 8000
 
 
 # Create FastAPI app
@@ -70,4 +70,4 @@ async def startup_event():
 
 # Run the server
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(PORT))
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
