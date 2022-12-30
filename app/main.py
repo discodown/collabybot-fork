@@ -59,12 +59,12 @@ async def startup_event():
     asyncio.create_task(discordBot.start(discordToken))
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    cog = discordBot.get_cog('GitHubCog')
-    cog.save_dicts()
-    cog = discordBot.get_cog('JiraCog')
-    cog.save_dicts()
+# @app.on_event("shutdown")
+# async def shutdown_event():
+#     cog = discordBot.get_cog('GitHubCog')
+#     cog.save_dicts()
+#     cog = discordBot.get_cog('JiraCog')
+#     cog.save_dicts()
 
 
 # Run the server
