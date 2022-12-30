@@ -24,10 +24,7 @@ class JiraNotAuthenticatedError(Embed):
 
 class UsageMessage(Embed):
     def __init__(self, message: str):
-        super().__init__()
-        self.color = Color.yellow(),
-        self.title = 'Usage',
-        self.description = message
+        super().__init__(color=Color.yellow(), title='Usage', description=message)
 
 
 class GitHub422Error(Embed):

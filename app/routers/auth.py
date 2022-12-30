@@ -76,6 +76,7 @@ async def jira_callback(state: str, code: str):
                           'redirect_uri': f'{HOME_URL}/auth/jira/callback'
                       },
                       headers={'Content-Type': 'application/json'})
+    print(r.content)
     token = r.json()['access_token']
     expires = datetime.now() + timedelta(seconds=r.json()['expires_in'])
     await bot.get_cog('JiraCog').jira_add_token(token, expires.strftime("%Y-%m-%d %H:%M:%S"))

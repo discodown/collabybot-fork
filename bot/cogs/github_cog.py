@@ -28,7 +28,7 @@ with open('bot/cogs/json_/gh_tokens.json') as f:
     gh_tokens = json.load(f)  # channel ids of channels subscribed to issues
     f.close()
 
-URL = 'https://9a28-104-254-90-195.ngrok.io'
+URL = 'https://c62b-72-78-191-96.ngrok.io'
 
 auth_queue = Queue(maxsize=1)
 queue_lock = asyncio.Lock()
@@ -39,13 +39,17 @@ class GitHubCog(commands.Cog):
         self.bot = bot
 
     github = discord.SlashCommandGroup('github', 'GitHub related commands.')
-    issues = github.create_subgroup('issues', 'Manage issues in GitHub repositories.')
-    pull_requests = github.create_subgroup('pull-requests', 'Manage pull requests in GitHub repositories.')
+    issues = github.create_subgroup('issue', 'Manage issues in GitHub repositories.')
+    pull_requests = github.create_subgroup('pull-request', 'Manage pull requests in GitHub repositories.')
     repositories = github.create_subgroup('repo', 'Add/remove GitHub repos.')
     subscribe = github.create_subgroup('subscribe', 'Subscribe channel to GitHub notifications.')
     unsubscribe = github.create_subgroup('unsubscribe', 'Unsubscribe channel to GitHub notifications.')
     fetch = github.create_subgroup('fetch', 'Fetch information about GitHub repositories.')
 
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: Guild):
+        server = str(guild.id)
+        repos[server] = {}
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: Guild):
@@ -233,7 +237,10 @@ class GitHubCog(commands.Cog):
             await ctx.respond(HelpEmbed('Channel Not Subscribed', f'{ctx.channel.name} is not subscribed to issues for {repo_name}.'))
         else:
             r = issue_subscribers.pop(repo_name)
-            await ctx.respond(SuccessEmbed(f'{ctx.channel.name} has been unsubscribed from issues for {repo_name}.'))
+            await ctx.respond(discord.Embed(
+                color=discord.Color.green(),
+                title='Success',
+                description=f'{ctx.channel.name} has been unsubscribed from issues for {repo_name}.'))
 
     @unsubscribe.command(name='pull-requests', description='Unsubscribe this channel from pull request notifications.')
     @guild_only()
@@ -244,7 +251,10 @@ class GitHubCog(commands.Cog):
             await ctx.respond(HelpEmbed('Channel Not Subscribed', f'{ctx.channel.name} is not subscribed to pull requests for {repo_name}.'))
         else:
             r = pr_subscribers.pop(repo_name)
-            await ctx.respond(SuccessEmbed(f'{ctx.channel.name} has been unsubscribed from pull requests for {repo_name}.'))
+            await ctx.respond(discord.Embed(
+                color=discord.Color.green(),
+                title='Success',
+                description=f'{ctx.channel.name} has been unsubscribed from issues for {repo_name}.'))
 
     @unsubscribe.command(name='commits', description='Unsubscribe this channel from issue notifications.')
     @guild_only()
@@ -256,8 +266,10 @@ class GitHubCog(commands.Cog):
                                         f'{ctx.channel.name} is not subscribed to commits for {repo_name}.'))
         else:
             r = commit_subscribers.pop(repo_name)
-            await ctx.respond(
-                SuccessEmbed(f'{ctx.channel.name} has been unsubscribed from commits for {repo_name}.'))
+            await ctx.respond(discord.Embed(
+                color=discord.Color.green(),
+                title='Success',
+                description=f'{ctx.channel.name} has been unsubscribed from commits for {repo_name}.'))
 
 
     @repositories.command(name='add',
@@ -287,8 +299,7 @@ class GitHubCog(commands.Cog):
                 # get repo via pygithub
                 g = Github(token)
                 repo = g.get_repo(repo_name)
-                if not repos.get(server):
-                    repos[server] = {}
+
                 if repo.full_name in repos.get(server):
                     await ctx.respond(embed=HelpEmbed('Repository Already Added',
                                                       f'{repo.full_name} has already been added.'))
@@ -345,9 +356,10 @@ class GitHubCog(commands.Cog):
     @repositories.command(name='remove', description='Remove a repository from this server\'s list.')
     @guild_only()
     async def remove_repo(self, ctx: discord.ApplicationContext, repo=''):
+        server = str(ctx.guild.id)
         if repo == '':
             await ctx.respond(embed=UsageMessage('/github repo remove <REPO_OWNER>/<REPO_NAME>'))
-        elif repos.get(repo) is None:
+        elif repos.get(server).get(repo) is None:
             await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
         else:
             r = repos.pop(repo)
@@ -358,8 +370,11 @@ class GitHubCog(commands.Cog):
             if pr_subscribers.get(repo) is not None:
                 r = pr_subscribers.pop(repo)
 
-            await ctx.respond(embed=SuccessEmbed(f'{repo} has been removed from {ctx.channel.name}, but webhooks '
+            await ctx.respond(embed=discord.Embed(color=discord.Color.green(),
+                                                  title='Success',
+                                                  description=(f'{repo} has been removed from {ctx.channel.name}, but webhooks '
                                                  f'will have to be removed from the repository manually on GitHub.'))
+                              )
 
     @github.command(name='repos', description='See the list of repos added to CollabyBot.')
     @guild_only()
@@ -428,7 +443,7 @@ class GitHubCog(commands.Cog):
                         commit_subscribers[repo][b].append(channel)
                         await ctx.respond(embed=CommitSubscriptionSuccess(ctx.channel.name, repo, branch))
                     else:
-                        await ctx.respond(embed=HelpEmbed('Channel Already Subscribed'
+                        await ctx.respond(embed=HelpEmbed('Channel Already Subscribed',
                                                           f'#{ctx.channel.name} is already subscribed to commits for '
                                                           f'{repo} on {branch}.'))
             else:
@@ -436,11 +451,11 @@ class GitHubCog(commands.Cog):
                     commit_subscribers[repo][branch].append(channel)
                     await ctx.respond(embed=CommitSubscriptionSuccess(ctx.channel.name, repo, branch))
                 else:
-                    await ctx.respond(embed=HelpEmbed('Channel Already Subscribed'
+                    await ctx.respond(embed=HelpEmbed('Channel Already Subscribed',
                                                       f'#{ctx.channel.name} is already subscribed to commits for '
                                                       f'{repo} on {branch}.'))
 
-    @fetch.command(name='open-pull-requests', description='Get a list of open pull requests in a repository.')
+    @fetch.command(name='pull-requests', description='Get a list of open pull requests in a repository.')
     @guild_only()
     async def fetch_pull_requests(self, ctx: discord.ApplicationContext, repo=''):
         """
@@ -454,12 +469,13 @@ class GitHubCog(commands.Cog):
         """
         user_id = str(ctx.user.id)
         token = gh_tokens.get(user_id)
+        server = str(ctx.guild.id)
         if token is None:
             await ctx.respond(GitHubNotAuthenticatedError(ctx.user.name))
         elif repo == '':
             await ctx.respond(embed=UsageMessage('/github fetch issues <REPO_OWNER>/<REPO_NAME>'))
-        elif repos.get(repo) is None:
-            await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
+        elif repos.get(server).get(repo) is None:
+            await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}.'))
         else:
             pages = []
             embeds = []
@@ -468,21 +484,24 @@ class GitHubCog(commands.Cog):
             repo = g.get_repo(repo)
             # get open(active) PR
             pulls = repo.get_pulls(state='open')
-            for i in range(0, len(pulls)):
+            for i in range(0, pulls.totalCount):
                 embeds.append(discord.Embed(title=pulls[i].title, color=discord.Color.blurple()))
-                embeds[i].add_field(name='ID', value=pulls[i].id, inline=True)
-                embeds[i].add_field(name='Author', value=pulls[i].user, inline=True)
+                embeds[i].add_field(name='Number', value=pulls[i].number, inline=True)
+                embeds[i].add_field(name='Author', value=pulls[i].user.login, inline=True)
                 embeds[i].add_field(name='URL', value=pulls[i].html_url, inline=True)
                 embeds[i].add_field(name='Created At', value=pulls[i].created_at.strftime("%m/%d/%Y, %H:%M:%S"), inline=True)
                 embeds[i].add_field(name='Base', value=pulls[i].base.ref, inline=True)
-                embeds[i].add_field(name='Head', value=pulls[i].head, inline=True)
+                embeds[i].add_field(name='Head', value=pulls[i].head.ref, inline=True)
                 embeds[i].add_field(name='Body', value=pulls[i].body, inline=False)
                 pages.append(Page(
-                    content=f'PR #{i + 1} of {len(pulls)} in {repo}):',
+                    content=f'PR #{i + 1} of {pulls.totalCount} in **{repo.full_name}**):',
                     embeds=[embeds[i]])
                 )
-            paginator = Paginator(pages=pages)
-            await ctx.respond(embed=paginator)
+            if pages:
+                paginator = Paginator(pages=pages)
+                await paginator.respond(ctx.interaction, ephemeral=False)
+            else:
+                await ctx.respond(embed=HelpEmbed('No Issues Found', f'{repo.full_name} currently has no open pull requests.'))
 
     @fetch.command(name='issues', description='Get a list of open issues in a repository.')
     @guild_only()
@@ -497,13 +516,14 @@ class GitHubCog(commands.Cog):
         :return: None
         """
         user_id = str(ctx.user.id)
+        server = str(ctx.guild.id)
         token = gh_tokens.get(user_id)
         if token is None:
             await ctx.respond(GitHubNotAuthenticatedError(ctx.user.name))
         elif repo == '':
             await ctx.respond(embed=UsageMessage('/github fetch issues <REPO_OWNER>/<REPO_NAME>'))
-        elif repos.get(repo) is None:
-            await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
+        elif repos.get(server).get(repo) is None:
+            await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}.'))
         else:
             pages = []
             embeds = []
@@ -512,52 +532,59 @@ class GitHubCog(commands.Cog):
             repo = g.get_repo(repo)
             # get open(active) PR
             issues = repo.get_issues(state='open')
-            for i in range(0, len(issues)):
+
+            for i in range(0, issues.totalCount):
                 embeds.append(discord.Embed(title=issues[i].title, color=discord.Color.blurple()))
-                embeds[i].add_field(name='ID', value=issues[i].id, inline=True)
-                embeds[i].add_field(name='Author', value=issues[i].user, inline=True)
+                embeds[i].add_field(name='Number', value=issues[i].number, inline=True)
+                embeds[i].add_field(name='Author', value=issues[i].user.login, inline=True)
                 embeds[i].add_field(name='URL', value=issues[i].html_url, inline=True)
                 embeds[i].add_field(name='Created At', value=issues[i].created_at.strftime("%m/%d/%Y, %H:%M:%S"),
                                     inline=True)
-                embeds[i].add_field(name='Base', value=issues[i].base.ref, inline=True)
-                embeds[i].add_field(name='Head', value=issues[i].head, inline=True)
                 embeds[i].add_field(name='Body', value=issues[i].body, inline=False)
                 pages.append(Page(
-                    content=f'Issues #{i + 1} of {len(issues)} in {repo}):',
+                    content=f'Issue #{i + 1} of {issues.totalCount} in **{repo.full_name}**:',
                     embeds=[embeds[i]])
                 )
-            paginator = Paginator(pages=pages)
-            await ctx.respond(embed=paginator)
+            if pages:
+                paginator = Paginator(pages=pages)
+                await paginator.respond(ctx.interaction, ephemeral=False)
+            else:
+                await ctx.respond(embed=HelpEmbed('No Issues Found', f'{repo.full_name} currently has no open issues.'))
 
     @issues.command(name='close', description='Close an issue.')
     @guild_only()
     async def issue_close(self,  ctx: discord.ApplicationContext, repo='', issue_id=''):
         user_id = str(ctx.user.id)
         token = gh_tokens.get(user_id)
+        server = str(ctx.guild.id)
         if token is None:
             await ctx.respond(GitHubNotAuthenticatedError(ctx.user.name))
         elif repo == '' or issue_id == '':
-            await ctx.respond(embed=UsageMessage('/github issue close <REPO_OWNER>/<REPO_NAME> <ISSUE_ID> [COMMENT]'))
-        elif repos.get(repo) is None:
-            await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
+            await ctx.respond(embed=UsageMessage('/github issue close <REPO_OWNER>/<REPO_NAME> <ISSUE_NUMBER> [COMMENT]'))
+        elif repos.get(server).get(repo) is None:
+            await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}.'))
         else:
             g = Github(token)
             r = g.get_repo(repo)
             issue = r.get_issue(int(issue_id))
             issue.edit(state='closed')
 
-            await ctx.respond(embed=SuccessEmbed(f'Issue {issue.title} in {repo} has been closed.'))
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.green(),
+                title='Success',
+                description=f'Issue {issue.title} in {repo} has been closed.'))
 
     @issues.command(name='assign', description='Assign an issue to a GitHub user.')
     @guild_only()
     async def issue_assign(self,  ctx: discord.ApplicationContext, repo='', issue_id='', assignees=''):
         user_id = str(ctx.user.id)
         token = gh_tokens.get(user_id)
+        server = str(ctx.guild.id)
         if token is None:
             await ctx.respond(GitHubNotAuthenticatedError(ctx.user.name))
         elif repo == '' or issue_id == '' or assignees == '':
-            await ctx.respond(embed=UsageMessage('/github issue assign <REPO_OWNER>/<REPO_NAME> <ISSUE_ID> <ASSIGNEE(S)>'))
-        elif repos.get(repo) is None:
+            await ctx.respond(embed=UsageMessage('/github issue assign <REPO_OWNER>/<REPO_NAME> <ISSUE_NUMBER> <ASSIGNEE(S)>'))
+        elif repos.get(server).get(repo) is None:
             await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
         else:
             g = Github(token)
@@ -566,18 +593,19 @@ class GitHubCog(commands.Cog):
             assignee_list = assignees.split(' ')
             issue.edit(assignees=assignee_list)
 
-            await ctx.respond(f'Issue {issue.title} has been assigned to {assignee_list}.')
+            await ctx.respond(f'Issue {issue.title} has been assigned to {", ".join(assignee_list)}.')
 
     @pull_requests.command(name='approve', description='Approve a pull request.')
     @guild_only()
     async def pull_request_approve(self,  ctx: discord.ApplicationContext, repo='', pr_id='', comment=''):
         user_id = str(ctx.user.id)
         token = gh_tokens.get(user_id)
+        server = str(ctx.guild.id)
         if token is None:
             await ctx.respond(GitHubNotAuthenticatedError(ctx.user.name))
         elif repo == '':
             await ctx.respond(embed=UsageMessage('/github pull-request <REPO_OWNER>/<REPO_NAME> <PR_ID> [COMMENT]'))
-        elif repos.get(repo) is None:
+        elif repos.get(server).get(repo) is None:
             await ctx.respond(embed=HelpEmbed('Repo Not Added', f'{repo} has not been added to {ctx.guild.name}'))
         else:
             g = Github(token)
@@ -585,7 +613,11 @@ class GitHubCog(commands.Cog):
             pr = r.get_pull(int(pr_id))
             pr.create_review(body=comment, event='APPROVE')
 
-            await ctx.respond(f'PR {pr.title} has been approved.')
+            await ctx.respond(embed=discord.Embed(
+                color=discord.Color.green(),
+                title='Success',
+                description=f'{pr.title} has been approved.')
+            )
 
     @github.command(name='auth', description='Authenticate with the CollabyBot OAuth app for full access to GitHub '
                                              'repositories.')
@@ -621,5 +653,5 @@ class AuthButton(discord.ui.View):
         super().__init__()
         button = discord.ui.Button(label="Authorize",
                                    style=discord.ButtonStyle.link,
-                                   url=f'https://9a28-104-254-90-195.ngrok.io/auth/github')
+                                   url=f'https://c62b-72-78-191-96.ngrok.io/auth/github')
         self.add_item(button)
