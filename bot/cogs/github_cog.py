@@ -296,10 +296,11 @@ class GitHubCog(commands.Cog):
         """
 
         server = str(ctx.guild_id)
+        user_id = str(ctx.author.id)
         if repo_name == '':
             await ctx.respond(embed=UsageMessage(f'/github repo add <REPO_OWNER>/<REPO_NAME>'))
         else:
-            token = gh_tokens.get(str(ctx.author.id))
+            token = gh_tokens.get(user_id)
             if token is None:
                 await ctx.respond(embed=GitHubNotAuthenticatedError(ctx.user.name))
             else:
@@ -633,8 +634,8 @@ class GitHubCog(commands.Cog):
     @guild_only()
     async def gh_auth(self, ctx: discord.ApplicationContext):
         user_id = str(ctx.author.id)
-
-        if gh_tokens.get(user_id) is not None:
+        token = gh_tokens.get(user_id)
+        if token is not None:
             await ctx.respond(embed=HelpEmbed(title='User Already Authenticated',
                                               message=f'User {ctx.user.name} is already authenticated with GitHub.'))
         else:
