@@ -69,8 +69,3 @@ async def startup_event():
 #     cog.save_dicts()
 #     cog = discordBot.get_cog('JiraCog')
 #     cog.save_dicts()
-
-
-# Run the server
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
