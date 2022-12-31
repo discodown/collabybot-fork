@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 import http
 import uvicorn
 import nest_asyncio
-from routers import webhook, auth
+from app.routers import webhook, auth
 import bot
 from bot.CollabyBot import DiscordCollabyBot
 import logging
