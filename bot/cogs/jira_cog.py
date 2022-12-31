@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-
 import discord
 import requests
 from discord import Guild, Member, guild_only
@@ -15,17 +14,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from queue import Queue
 from bot.embeds import JiraExpiredTokenError, JiraNotAuthenticatedError, JiraAuthSuccess, HelpEmbed, UsageMessage, \
-    JiraUserError, IssueAssignSuccess, JiraInstanceNotFoundError, SuccessEmbed
+    JiraUserError, IssueAssignSuccess, JiraInstanceNotFoundError
 
 JIRA_RESOURCES_ENDPOINT = os.getenv('JIRA_RESOURCES_ENDPOINT')
 JIRA_API_URL = os.getenv('JIRA_API_URL')
+HOME_URL = os.getenv('HOME_URL')
 
-with open('bot/cogs/json_/jira_tokens.json') as f:
-    jira_tokens = json.load(f)  # channel ids of channels subscribed to issues
-    f.close()
-with open('bot/cogs/json_/jira_sites.json') as f:
-    jira_sites = json.load(f)  # channel ids of channels subscribed to issues
-    f.close()
+# with open('bot/cogs/json_/jira_tokens.json') as f:
+#     jira_tokens = json.load(f)  # channel ids of channels subscribed to issues
+#     f.close()
+# with open('bot/cogs/json_/jira_sites.json') as f:
+#     jira_sites = json.load(f)  # channel ids of channels subscribed to issues
+#     f.close()
+
+jira_tokens = {}
+jira_sites = {}
 
 auth_queue = Queue(maxsize=1)
 queue_lock = asyncio.Lock()
@@ -84,15 +87,15 @@ class JiraCog(commands.Cog):
         if jira_tokens.get(user) is not None:
             jira_tokens.pop(user)
 
-        self.save_dicts()
+        # self.save_dicts()
 
-    def save_dicts(self):
-        with open('bot/cogs/json_/jira_tokens.json', 'w') as f:
-            json.dump(jira_tokens, f)  # channel ids of channels subscribed to issues
-            f.close()
-        with open('bot/cogs/json_/jira_sites.json', 'w') as f:
-            json.dump(jira_sites, f)  # channel ids of channels subscribed to issues
-            f.close()
+    # def save_dicts(self):
+    #     with open('bot/cogs/json_/jira_tokens.json', 'w') as f:
+    #         json.dump(jira_tokens, f)  # channel ids of channels subscribed to issues
+    #         f.close()
+    #     with open('bot/cogs/json_/jira_sites.json', 'w') as f:
+    #         json.dump(jira_sites, f)  # channel ids of channels subscribed to issues
+    #         f.close()
 
     def burndown(self, jira, issues):
         """
@@ -625,5 +628,5 @@ class AuthButton(discord.ui.View):
         super().__init__()
         button = discord.ui.Button(label="Authorize",
                                    style=discord.ButtonStyle.link,
-                                   url=f'https://c62b-72-78-191-96.ngrok.io/auth/jira')
+                                   url=f'{HOME_URL}/auth/jira')
         self.add_item(button)

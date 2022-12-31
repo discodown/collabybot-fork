@@ -7,16 +7,20 @@ from fastapi.responses import RedirectResponse
 import http
 import uvicorn
 import nest_asyncio
-from routers import webhook, auth
+from app.routers import webhook, auth
 import bot
 from bot.CollabyBot import DiscordCollabyBot
+import logging
+
+logging.basicConfig(level=logging.ERROR)
 
 nest_asyncio.apply()  # needed to prevent errors caused by nested async tasks
-load_dotenv()  # load env file
+# load_dotenv()  # load env file
 intents = discord.Intents().all()  # default to all intents for bot
 discordToken = os.getenv('DISCORD_BOT_TOKEN')  # get bot token
 discordBot = DiscordCollabyBot(intents=intents, command_prefix='/')  # create the bot instance
 DiscordCollabyBot.add_all_commands(discordBot)  # register all bot commands before running the bot
+PORT = os.getenv('PORT') or 8000
 
 
 # Create FastAPI app
@@ -59,14 +63,9 @@ async def startup_event():
     asyncio.create_task(discordBot.start(discordToken))
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    cog = discordBot.get_cog('GitHubCog')
-    cog.save_dicts()
-    cog = discordBot.get_cog('JiraCog')
-    cog.save_dicts()
-
-
-# Run the server
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# @app.on_event("shutdown")
+# async def shutdown_event():
+#     cog = discordBot.get_cog('GitHubCog')
+#     cog.save_dicts()
+#     cog = discordBot.get_cog('JiraCog')
+#     cog.save_dicts()
