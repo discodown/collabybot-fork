@@ -10,6 +10,9 @@ import nest_asyncio
 from routers import webhook, auth
 import bot
 from bot.CollabyBot import DiscordCollabyBot
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 nest_asyncio.apply()  # needed to prevent errors caused by nested async tasks
 # load_dotenv()  # load env file
