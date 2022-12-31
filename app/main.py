@@ -12,7 +12,7 @@ import bot
 from bot.CollabyBot import DiscordCollabyBot
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 nest_asyncio.apply()  # needed to prevent errors caused by nested async tasks
 # load_dotenv()  # load env file
