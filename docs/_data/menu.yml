@@ -1,6 +1,6 @@
 - label: User Guide
   items:
     - name: Commands
-      link: /commands/
+      link: /guide/commands/
     - name: FAQ
-      link: /faq/
+      link: /guide/faq/

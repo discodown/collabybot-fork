@@ -2,7 +2,7 @@
 layout: page
 title: CollabyBot | User Guide - Commands
 permalink: /guide/commands/
-show_sidebar: true
+show_sidebar: false
 menubar: menu
 ---
 
