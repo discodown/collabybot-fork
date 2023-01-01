@@ -2,8 +2,8 @@
 layout: page
 title: CollabyBot | User Guide - Commands
 permalink: /guide/commands/
-show_menu: true
-menu: menu
+show_sidebar: true
+menubar: menu
 ---
 
 ## General Commands
