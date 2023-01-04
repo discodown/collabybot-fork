@@ -11,6 +11,6 @@ CollabyBot lets you perform actions in GitHub and Jira using Discord slash comma
 
 Once you've authorized with GitHub, use **/github repos add** to add a repository to your server's list of associated repositories. You can use other **/github** commands to subscribe channels to event notifications from tracked repositories, view and approve pull requests, and more.
 
-After authorizing with Jira, use **/jira instance set** to associate your server with a Jira instance. Use **/jira** commands to a project's active sprint and manage issues.
+After authorizing with Jira, use **/jira instance set** to associate your server with a Jira instance. Use **/jira** commands to a view a project's active sprint and manage issues.
 
 For a full list of available commands, use **/commands**. For more detailed explanations of commands, see the user guide.
